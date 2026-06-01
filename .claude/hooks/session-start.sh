@@ -6,6 +6,9 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
 	exit 0
 fi
 
+# Run asynchronously so the session can start without waiting on the install.
+echo '{"async": true, "asyncTimeout": 300000}'
+
 cd "${CLAUDE_PROJECT_DIR:-.}"
 
 # Install dependencies. `npm install` (not `npm ci`) so the cached container
