@@ -1,0 +1,41 @@
+// Tailscale ACL — paste into the admin console → Access Controls.
+// This is HuJSON (JSON with comments). Replace the email with your own.
+//
+// Starting posture: you (the tailnet owner) can reach all your devices and
+// SSH into any of them via Tailscale SSH. Nothing is exposed beyond your
+// own logged-in account. Expand deliberately as you add users/devices.
+{
+  // Groups make rules readable. Add more people here later if you ever share.
+  "groups": {
+    "group:admins": ["cschett13@gmail.com"]
+  },
+
+  // Tags let you label devices (e.g. a NAS) so rules don't depend on who set
+  // them up. Admins are allowed to assign these tags to devices.
+  "tagOwners": {
+    "tag:nas": ["group:admins"],
+    "tag:pc":  ["group:admins"]
+  },
+
+  // Who can talk to what. Start permissive *within your own account* only.
+  "acls": [
+    {
+      // Admins can reach every device on every port.
+      "action": "accept",
+      "src":    ["group:admins"],
+      "dst":    ["*:*"]
+    }
+  ],
+
+  // Tailscale SSH rules — who may open an SSH session to which devices,
+  // and as which local users. "check" forces periodic re-auth (more secure);
+  // switch to "accept" if you want passwordless within the session window.
+  "ssh": [
+    {
+      "action": "check",
+      "src":    ["group:admins"],
+      "dst":    ["group:admins"],
+      "users":  ["autogroup:nonroot", "root"]
+    }
+  ]
+}

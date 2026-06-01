@@ -1,0 +1,48 @@
+# Docker Compose stack to run ON the UGREEN NAS.
+#
+# Deploy:
+#   1. Copy this folder to the NAS (e.g. /volume1/docker/homelab).
+#   2. cp .env.example .env  and edit the values.
+#   3. From the NAS shell:  docker compose up -d
+#      (or import via the UGOS Docker/Container UI).
+#
+# Services:
+#   - syncthing : two-way file sync with your PC (and phone, etc.)
+#   - tailscale : OPTIONAL — only if UGOS has no native Tailscale app.
+#                 Comment it out if you installed Tailscale from the App Center.
+
+services:
+  syncthing:
+    image: lscr.io/linuxserver/syncthing:latest
+    container_name: syncthing
+    hostname: nas-syncthing
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${CONFIG_ROOT}/syncthing:/config
+      - ${DATA_ROOT}:/data           # the folders you want to sync live here
+    ports:
+      - "8384:8384"                  # Web UI (reach via http://nas:8384 on tailnet)
+      - "22000:22000/tcp"            # sync protocol
+      - "22000:22000/udp"
+      - "21027:21027/udp"            # local discovery
+    restart: unless-stopped
+
+  # ---- OPTIONAL: Tailscale as a container (skip if UGOS native app is used) ----
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailscale
+    hostname: nas
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}     # create a reusable auth key in the admin console
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_EXTRA_ARGS=--ssh         # enables Tailscale SSH into the NAS node
+    volumes:
+      - ${CONFIG_ROOT}/tailscale:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
