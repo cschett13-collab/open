@@ -1,0 +1,9 @@
+# Example rsync exclude patterns — copy to backup.excludes and point
+# EXCLUDE_FILE at it in backup.env. One pattern per line.
+node_modules/
+.cache/
+*.tmp
+*.swp
+.Trash-*/
+__pycache__/
+.venv/

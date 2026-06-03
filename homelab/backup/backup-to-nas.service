@@ -1,0 +1,26 @@
+# systemd user service that runs one backup pass.
+# Install as a USER unit (no root needed, uses your SSH keys / Tailscale identity):
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp backup-to-nas.service backup-to-nas.timer ~/.config/systemd/user/
+#   # edit ExecStart path below to where you cloned this repo
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now backup-to-nas.timer
+#   # let it run even when you're logged out:
+#   sudo loginctl enable-linger "$USER"
+#
+# Check it:
+#   systemctl --user list-timers
+#   journalctl --user -u backup-to-nas.service -f
+
+[Unit]
+Description=Backup PC folders to NAS over Tailscale
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# EDIT this path to the actual location of the script on your PC:
+ExecStart=%h/open/homelab/backup/backup-to-nas.sh
+Nice=10
+IOSchedulingClass=idle

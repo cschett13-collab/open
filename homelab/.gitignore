@@ -1,0 +1,5 @@
+# Never commit per-machine secrets / config
+.env
+*.env
+!*.env.example
+backup.env

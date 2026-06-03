@@ -1,0 +1,13 @@
+# Runs the backup daily at 02:00, and catches up if the PC was off.
+# See backup-to-nas.service for install instructions.
+
+[Unit]
+Description=Daily PC -> NAS backup
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
