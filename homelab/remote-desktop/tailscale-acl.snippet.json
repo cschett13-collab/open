@@ -1,0 +1,41 @@
+// Remote-desktop ACL additions — MERGE these into your existing tailnet policy
+// (the one based on ../tailscale/acl.example.json) in the admin console →
+// Access Controls. This is HuJSON (JSON with comments).
+//
+// Goal: only YOU (group:admins) may open remote-desktop sessions, and only to
+// your own tagged devices — on the standard RDP / VNC / RustDesk ports. Replace
+// the email + tags to match your tailnet.
+//
+// The base policy already lets group:admins reach "*:*", so these rules are
+// belt-and-suspenders / a template for when you tighten the base "acls" down
+// from the permissive starter. If you keep the permissive admin rule, these are
+// documentation of intent; if you scope the base rule, add these so remote
+// desktop keeps working.
+{
+  "groups": {
+    "group:admins": ["cschett13@gmail.com"]
+  },
+
+  "tagOwners": {
+    "tag:pc":  ["group:admins"],
+    "tag:nas": ["group:admins"]
+  },
+
+  "acls": [
+    {
+      // Admins -> the PC on RDP (3389) and VNC (5900).
+      "action": "accept",
+      "src":    ["group:admins"],
+      "dst":    ["tag:pc:3389", "tag:pc:5900"]
+    },
+    {
+      // Admins -> the NAS on the RustDesk server ports (hbbs/hbbr).
+      "action": "accept",
+      "src":    ["group:admins"],
+      "dst":    ["tag:nas:21115-21119"]
+    }
+  ]
+
+  // Tag your devices so the rules apply: in the admin console, edit each device
+  // and add tag:pc / tag:nas (or run `tailscale up --advertise-tags=tag:pc`).
+}

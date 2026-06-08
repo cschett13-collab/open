@@ -1,0 +1,29 @@
+# systemd USER service: start wayvnc (wlroots Wayland) bound to the tailnet.
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp wayvnc.service ~/.config/systemd/user/
+#   # edit ExecStart path below to where you cloned this repo
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now wayvnc.service
+# Inspect:
+#   systemctl --user status wayvnc.service
+#   journalctl --user -u wayvnc.service -f
+#
+# Note: this is a USER unit on purpose — it runs inside your graphical session
+# so it can see your Wayland display. It does NOT need root.
+
+[Unit]
+Description=wayvnc VNC server (bound to Tailscale only)
+After=graphical-session.target tailscaled.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+# EDIT this path to the actual location of the script on your PC:
+ExecStart=%h/open/homelab/remote-desktop/vnc/start-vnc.sh
+Environment=VNC_SERVER=wayvnc
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
