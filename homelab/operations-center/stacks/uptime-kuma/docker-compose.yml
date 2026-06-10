@@ -1,0 +1,16 @@
+# Uptime Kuma — uptime monitoring & alerts.  Reach at http://nas:3001
+#
+# Deploy on the NAS:
+#   cd uptime-kuma && docker compose up -d
+# Then open http://nas:3001 and create the admin account on first load.
+# Tailnet-only: do NOT forward port 3001 to the internet.
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "3001:3001"
+    restart: unless-stopped

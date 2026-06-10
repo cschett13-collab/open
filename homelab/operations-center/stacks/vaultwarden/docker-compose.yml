@@ -1,0 +1,28 @@
+# Vaultwarden — Bitwarden-compatible password manager.  Reach at http://nas:8084
+#
+# Deploy on the NAS:
+#   cd vaultwarden && cp .env.example .env && $EDITOR .env   # set ADMIN_TOKEN
+#   docker compose up -d
+# Open http://nas:8084, create your account, then DISABLE signups (see below).
+#
+# Security: keep this tailnet-only. A password vault should never be exposed to
+# the internet without a reverse proxy + HTTPS you fully trust. Over Tailscale
+# the WireGuard tunnel already encrypts traffic between your devices.
+
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    environment:
+      # Admin panel token. Generate one with:  openssl rand -base64 48
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      # Allow yourself to register the first account, then set this to false
+      # and `docker compose up -d` again to lock signups.
+      - SIGNUPS_ALLOWED=${SIGNUPS_ALLOWED:-true}
+      # Must match how clients reach it (MagicDNS name over the tailnet).
+      - DOMAIN=${DOMAIN:-http://nas:8084}
+    volumes:
+      - ./data:/data
+    ports:
+      - "8084:80"
+    restart: unless-stopped

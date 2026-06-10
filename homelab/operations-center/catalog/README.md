@@ -8,6 +8,10 @@ lists:
 | [`self-hosted-apps.md`](self-hosted-apps.md) | 100+ self-hostable apps across 12 categories — dashboards, files, media, docs, monitoring, home automation, local AI, and more. |
 | [`remote-access.md`](remote-access.md) | Every way to reach your machines — graphical, terminal, file, network-level, and power/presence. |
 
+> **Want it running, not just listed?** The 10 most useful apps here have
+> copy-paste Docker Compose ready to go in [`../stacks/`](../stacks/) — ports
+> already match the dashboard tiles.
+
 ## How to use it
 
 1. Skim for something you want. Every entry is a real, actively-maintained,

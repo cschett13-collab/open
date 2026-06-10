@@ -16,6 +16,7 @@ on the NAS that links to and monitors everything, plus a big catalog of
 |---------------|----------------------------------------------------------------------|
 | `dashboard/`  | The control center itself — a [Homepage](https://gethomepage.dev) stack for the NAS, pre-wired to the homelab, bound to the tailnet |
 | `catalog/`    | The "100+ options for everything" — a curated, categorized menu of self-hostable apps + every remote-access method, all local |
+| `stacks/`     | Copy-paste Docker Compose for the 10 most useful apps, ports pre-matched to the dashboard tiles |
 
 ## The 60-second version
 

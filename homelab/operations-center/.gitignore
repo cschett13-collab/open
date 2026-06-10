@@ -7,3 +7,20 @@
 # the YAML templates we ship.
 dashboard/config/logs/
 dashboard/config/*.log
+
+# Stack runtime data (created next to each compose file on the NAS) — never
+# commit databases, caches, media, or generated config.
+stacks/*/data/
+stacks/*/config/
+stacks/*/cache/
+stacks/*/pgdata/
+stacks/*/redisdata/
+stacks/*/media/
+stacks/*/export/
+stacks/*/consume/
+stacks/*/work/
+stacks/*/conf/
+stacks/*/ollama/
+stacks/*/open-webui/
+stacks/*/database.db
+stacks/*/settings.json

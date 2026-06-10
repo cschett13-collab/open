@@ -1,0 +1,28 @@
+# Jellyfin — free media server (movies, TV, music).  Reach at http://nas:8096
+#
+# Deploy on the NAS:
+#   cd jellyfin && docker compose up -d
+# Then open http://nas:8096 and run the first-time setup wizard.
+#
+# Point the two media bind-mounts below at where your library actually lives on
+# the NAS. Hardware transcoding (Intel QSV / VAAPI) needs the /dev/dri device —
+# uncomment that block if your NAS has an iGPU. Tailnet-only; don't expose 8096.
+
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    environment:
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - ./config:/config
+      - ./cache:/cache
+      # EDIT these to your real media paths on the NAS:
+      - /volume1/media/movies:/media/movies:ro
+      - /volume1/media/tv:/media/tv:ro
+    ports:
+      - "8096:8096"
+    # --- Optional Intel/AMD hardware transcoding ---
+    # devices:
+    #   - /dev/dri:/dev/dri
+    restart: unless-stopped
