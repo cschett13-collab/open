@@ -65,3 +65,10 @@ You can mix and match: RDP to the PC, RustDesk for the phone. Pick per machine.
   from the `.env.example` templates. Nothing here hard-codes a password.
 - Standard ports referenced throughout: RDP `3389`, VNC `5900`, RustDesk
   `21115–21119`.
+
+## See also
+
+- **`../operations-center/`** — a dashboard that ties these (and everything else
+  in the homelab) together into one page, plus a catalog of 100+ all-local
+  options including a full menu of remote-access methods
+  (`../operations-center/catalog/remote-access.md`).

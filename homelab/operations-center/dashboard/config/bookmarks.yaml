@@ -1,0 +1,30 @@
+# Homepage bookmarks — https://gethomepage.dev/configs/bookmarks/
+# Quick links. The "Homelab Kit" group points at this repo's docs so the
+# how-to is one click from the dashboard.
+
+- Homelab Kit:
+    - Operations Center:
+        - abbr: OC
+          href: https://github.com/cschett13-collab/open/tree/main/homelab/operations-center
+    - Remote Desktop:
+        - abbr: RD
+          href: https://github.com/cschett13-collab/open/tree/main/homelab/remote-desktop
+    - App Catalog (100+):
+        - abbr: CAT
+          href: https://github.com/cschett13-collab/open/blob/main/homelab/operations-center/catalog/self-hosted-apps.md
+
+- Admin:
+    - Tailscale:
+        - abbr: TS
+          href: https://login.tailscale.com/admin/machines
+    - UGOS (NAS):
+        - abbr: NAS
+          href: http://nas:9999
+
+- Reference:
+    - awesome-selfhosted:
+        - abbr: AS
+          href: https://github.com/awesome-selfhosted/awesome-selfhosted
+    - Homepage docs:
+        - abbr: HP
+          href: https://gethomepage.dev

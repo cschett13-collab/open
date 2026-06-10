@@ -1,0 +1,9 @@
+# Never commit per-machine secrets / config.
+.env
+*.env
+!*.env.example
+
+# Homepage writes runtime state into the config dir when running; keep only
+# the YAML templates we ship.
+dashboard/config/logs/
+dashboard/config/*.log

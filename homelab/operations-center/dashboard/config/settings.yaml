@@ -1,0 +1,34 @@
+# Homepage settings — https://gethomepage.dev/configs/settings/
+title: Homelab Operations Center
+description: Single pane of glass for the homelab — all local, over Tailscale.
+
+# Visual
+theme: dark
+color: slate
+headerStyle: clean
+target: _blank          # open service links in a new tab
+
+# Layout: control the order and column count of the groups defined in
+# services.yaml. Add a line here when you add a group there.
+layout:
+  Remote Access:
+    style: row
+    columns: 4
+  Files & Sync:
+    style: row
+    columns: 4
+  Monitoring:
+    style: row
+    columns: 4
+  Media:
+    style: row
+    columns: 4
+  Apps:
+    style: row
+    columns: 4
+
+# Quick launch (the "/" search box)
+quicklaunch:
+  searchDescriptions: true
+  hideInternetSearch: false
+  provider: duckduckgo

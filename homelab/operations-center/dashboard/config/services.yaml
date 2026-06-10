@@ -1,0 +1,87 @@
+# Homepage services — https://gethomepage.dev/configs/services/
+#
+# Tiles are grouped. These are pre-wired to this kit; replace hosts/ports with
+# your real ones and delete what you don't run. `href` uses the MagicDNS name
+# `nas` so links work from any tailnet device.
+
+- Remote Access:
+    - Tailscale Admin:
+        icon: tailscale.png
+        href: https://login.tailscale.com/admin/machines
+        description: Tailnet devices, ACLs, DNS
+    - RustDesk Server:
+        icon: rustdesk.png
+        href: http://nas:21118
+        description: Self-hosted remote-desktop relay
+    - Remote Desktop (PC):
+        icon: mdi-remote-desktop
+        href: rdp://pc:3389
+        description: RDP into the PC (../../remote-desktop/rdp)
+    - Cockpit (PC):
+        icon: cockpit.png
+        href: https://pc:9090
+        description: Web console — services, logs, terminal
+
+- Files & Sync:
+    - Syncthing:
+        icon: syncthing.png
+        href: http://nas:8384
+        description: Two-way file sync
+    - FileBrowser:
+        icon: filebrowser.png
+        href: http://nas:8081
+        description: Web file manager
+    - Nextcloud:
+        icon: nextcloud.png
+        href: http://nas:8082
+        description: Files, calendar, contacts
+
+- Monitoring:
+    - Uptime Kuma:
+        icon: uptime-kuma.png
+        href: http://nas:3001
+        description: Service uptime & alerts
+    - Dozzle:
+        icon: dozzle.png
+        href: http://nas:8888
+        description: Live Docker logs
+    - Scrutiny:
+        icon: scrutiny.png
+        href: http://nas:8083
+        description: Disk S.M.A.R.T. health
+    - Glances:
+        icon: glances.png
+        href: http://nas:61208
+        description: System resources
+
+- Media:
+    - Jellyfin:
+        icon: jellyfin.png
+        href: http://nas:8096
+        description: Movies, TV, music
+    - Immich:
+        icon: immich.png
+        href: http://nas:2283
+        description: Photos with ML search
+    - Audiobookshelf:
+        icon: audiobookshelf.png
+        href: http://nas:13378
+        description: Audiobooks & podcasts
+
+- Apps:
+    - Vaultwarden:
+        icon: vaultwarden.png
+        href: http://nas:8084
+        description: Passwords
+    - Paperless-ngx:
+        icon: paperless.png
+        href: http://nas:8085
+        description: Document archive
+    - Home Assistant:
+        icon: home-assistant.png
+        href: http://nas:8123
+        description: Smart home hub
+    - Open WebUI:
+        icon: open-webui.png
+        href: http://nas:3080
+        description: Local LLM chat (Ollama)

@@ -1,0 +1,12 @@
+# Homepage docker integration — https://gethomepage.dev/configs/docker/
+# Lets service tiles show live container status (running/stopped, CPU/RAM).
+# Uses the read-only socket mounted in docker-compose.yml.
+#
+# To enable on a tile, add `server: nas-docker` and `container: <name>` under it
+# in services.yaml. Example:
+#   - Syncthing:
+#       container: syncthing
+#       server: nas-docker
+
+nas-docker:
+  socket: /var/run/docker.sock
