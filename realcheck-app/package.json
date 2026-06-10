@@ -1,0 +1,18 @@
+{
+  "name": "realcheck-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RealCheck — AI reality checker. Tells you instantly if text, links, or images on your PC are real, fake, AI-generated, or a scam.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0",
+    "express": "^5.1.0"
+  }
+}

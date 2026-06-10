@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>RealCheck — Is it real or fake?</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+	<div class="aurora"></div>
+
+	<header class="topbar">
+		<div class="brand">
+			<span class="logo">◎</span>
+			<span class="brand-name">Real<span>Check</span></span>
+		</div>
+		<div class="engine-pill" id="enginePill">checking engine…</div>
+	</header>
+
+	<main>
+		<section class="hero">
+			<h1>Is it <span class="real">real</span> or <span class="fake">fake</span>?</h1>
+			<p class="tagline">Paste anything — a message, a link, or a screenshot — and get an instant, plain-English verdict on whether it's genuine, AI-generated, or a scam.</p>
+		</section>
+
+		<section class="console">
+			<div class="tabs" role="tablist">
+				<button class="tab active" data-tab="text" role="tab">✍️ Text / message</button>
+				<button class="tab" data-tab="url" role="tab">🔗 Link</button>
+				<button class="tab" data-tab="image" role="tab">🖼️ Image / screenshot</button>
+			</div>
+
+			<div class="panel" data-panel="text">
+				<textarea id="textInput" placeholder="Paste the message, email, post, or article you want checked…"></textarea>
+			</div>
+
+			<div class="panel hidden" data-panel="url">
+				<input id="urlInput" type="text" placeholder="https://suspicious-looking-link.example/login" />
+			</div>
+
+			<div class="panel hidden" data-panel="image">
+				<label class="dropzone" id="dropzone">
+					<input type="file" id="imageInput" accept="image/*" hidden />
+					<span class="dz-icon">⬆</span>
+					<span class="dz-text">Drop an image here or click to upload</span>
+					<img id="preview" alt="preview" hidden />
+				</label>
+			</div>
+
+			<button class="check-btn" id="checkBtn">
+				<span class="btn-label">Check it</span>
+				<span class="spinner" hidden></span>
+			</button>
+		</section>
+
+		<section class="result hidden" id="result">
+			<div class="gauge-wrap">
+				<svg class="gauge" viewBox="0 0 120 120">
+					<circle class="gauge-bg" cx="60" cy="60" r="52" />
+					<circle class="gauge-fill" id="gaugeFill" cx="60" cy="60" r="52" />
+				</svg>
+				<div class="gauge-center">
+					<div class="gauge-pct" id="gaugePct">0%</div>
+					<div class="gauge-label">confidence</div>
+				</div>
+			</div>
+
+			<div class="verdict-body">
+				<div class="verdict-badge" id="verdictBadge">—</div>
+				<h2 id="headline">—</h2>
+				<p id="summary"></p>
+				<div class="signals" id="signals"></div>
+				<div class="recommendation" id="recommendation"></div>
+			</div>
+		</section>
+
+		<p class="disclaimer">RealCheck gives a calibrated opinion, not a guarantee. Always verify high-stakes claims through an independent, official source.</p>
+	</main>
+
+	<script src="app.js"></script>
+</body>
+</html>
