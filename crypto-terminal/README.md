@@ -118,8 +118,15 @@ it fires an alert. In the installed PWA, tap **🔔 Alerts** once to grant
 permission and you'll get **phone notifications** (with a sound + on-screen flash)
 even when the app is backgrounded. Tapping a notification opens the app.
 
+**Closed-app push (Web Push):** notifications reach your phone **even when the app
+isn't open**. It's full standards-based Web Push (VAPID + RFC 8291 `aes128gcm`),
+implemented with **zero dependencies** on Node's built-in crypto. Keys and phone
+subscriptions are auto-generated and stored in `.data/` (git-ignored). Enable by
+tapping 🔔 Alerts (grants notifications + registers a push subscription); disable
+the whole feature with `ALPHA_PUSH=off`.
+
 - A 30-min per-symbol cooldown prevents spam.
-- Alerts also stream at `GET /api/alerts`.
+- Alerts also stream at `GET /api/alerts`; dead subscriptions are auto-pruned.
 - Tune sensitivity (or test it) with env vars:
 
 | Variable                  | Default  | Meaning                                  |

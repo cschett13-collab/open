@@ -11,11 +11,12 @@
 
 import process from 'node:process';
 import http from 'node:http';
-import {readFileSync} from 'node:fs';
+import {readFileSync, writeFileSync, mkdirSync} from 'node:fs';
 import {scan} from './lib/engine.js';
 import {verdict} from './lib/signals.js';
 import {briefing, aiConfig} from './lib/ai.js';
 import {scanStocks} from './lib/stocks.js';
+import {generateVapidKeys, sendNotification} from './lib/webpush.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const BAR = process.env.ALPHA_BAR || '5m';
@@ -28,6 +29,60 @@ let snapshot = null;
 let stocks = null;
 let briefingText = null;
 let lastError = null;
+
+// --- Web Push: persist VAPID keys + phone subscriptions ---------------------
+const DATA_DIR = new URL('.data/', import.meta.url);
+const VAPID_FILE = new URL('vapid.json', DATA_DIR);
+const SUBS_FILE = new URL('subscriptions.json', DATA_DIR);
+const PUSH_ON = (process.env.ALPHA_PUSH || 'on').toLowerCase() !== 'off';
+
+let vapid = null;
+let subscriptions = [];
+function loadPush() {
+	try {
+		mkdirSync(DATA_DIR, {recursive: true});
+	} catch {}
+
+	try {
+		vapid = JSON.parse(readFileSync(VAPID_FILE, 'utf8'));
+	} catch {
+		vapid = generateVapidKeys();
+		try {
+			writeFileSync(VAPID_FILE, JSON.stringify(vapid));
+		} catch {}
+	}
+
+	try {
+		subscriptions = JSON.parse(readFileSync(SUBS_FILE, 'utf8'));
+	} catch {
+		subscriptions = [];
+	}
+}
+
+function saveSubs() {
+	try {
+		writeFileSync(SUBS_FILE, JSON.stringify(subscriptions));
+	} catch {}
+}
+
+function pushToAll(alert) {
+	if (!PUSH_ON || !vapid || subscriptions.length === 0) return;
+	const payload = JSON.stringify({
+		title: `🚀 ${alert.sym} — ${alert.tag}`,
+		body: `${alert.kind === 'stock' ? 'Stock' : 'Crypto'} · ${alert.score}/100 · $${alert.price} (${alert.changePct >= 0 ? '+' : ''}${alert.changePct.toFixed(1)}%) · ${alert.why}`,
+	});
+	for (const sub of [...subscriptions]) {
+		sendNotification(sub, payload, vapid)
+			.then(r => {
+				// 404/410 mean the subscription is dead — prune it.
+				if (r.status === 404 || r.status === 410) {
+					subscriptions = subscriptions.filter(s => s.endpoint !== sub.endpoint);
+					saveSubs();
+				}
+			})
+			.catch(() => {});
+	}
+}
 
 // --- Real-time alert engine -------------------------------------------------
 // Fire an alert when a symbol crosses into a high-conviction state. Cooldown
@@ -63,6 +118,7 @@ function consider(kind, rows) {
 			ts: now,
 		});
 		if (alerts.length > 50) alerts.shift();
+		pushToAll(alerts[alerts.length - 1]);
 	}
 }
 
@@ -143,6 +199,27 @@ const ASSETS = {
 	'/icons/icon-512.png': {body: readBin('icons/icon-512.png'), type: 'image/png'},
 };
 
+function readBody(req, limit = 100_000) {
+	return new Promise((resolve, reject) => {
+		let data = '';
+		req.on('data', c => {
+			data += c;
+			if (data.length > limit) {
+				reject(new Error('body too large'));
+				req.destroy();
+			}
+		});
+		req.on('end', () => {
+			try {
+				resolve(data ? JSON.parse(data) : null);
+			} catch (error) {
+				reject(error);
+			}
+		});
+		req.on('error', reject);
+	});
+}
+
 const server = http.createServer((req, res) => {
 	const path = req.url.split('?')[0];
 
@@ -155,6 +232,46 @@ const server = http.createServer((req, res) => {
 	if (path === '/api/alerts') {
 		res.writeHead(200, {'content-type': 'application/json', 'cache-control': 'no-store'});
 		res.end(JSON.stringify({alerts: alerts.slice(-50).reverse()}));
+		return;
+	}
+
+	if (path === '/api/vapidPublicKey') {
+		res.writeHead(200, {'content-type': 'application/json', 'cache-control': 'no-store'});
+		res.end(JSON.stringify({key: PUSH_ON && vapid ? vapid.publicKey : null}));
+		return;
+	}
+
+	if (path === '/api/subscribe' && req.method === 'POST') {
+		readBody(req).then(sub => {
+			if (sub && sub.endpoint) {
+				if (!subscriptions.some(s => s.endpoint === sub.endpoint)) {
+					subscriptions.push(sub);
+					saveSubs();
+				}
+
+				res.writeHead(201, {'content-type': 'application/json'});
+				res.end(JSON.stringify({ok: true, count: subscriptions.length}));
+			} else {
+				res.writeHead(400);
+				res.end('{"ok":false}');
+			}
+		}).catch(() => {
+			res.writeHead(400);
+			res.end('{"ok":false}');
+		});
+		return;
+	}
+
+	if (path === '/api/unsubscribe' && req.method === 'POST') {
+		readBody(req).then(sub => {
+			subscriptions = subscriptions.filter(s => s.endpoint !== sub?.endpoint);
+			saveSubs();
+			res.writeHead(200, {'content-type': 'application/json'});
+			res.end(JSON.stringify({ok: true}));
+		}).catch(() => {
+			res.writeHead(400);
+			res.end('{"ok":false}');
+		});
 		return;
 	}
 
@@ -175,12 +292,15 @@ const server = http.createServer((req, res) => {
 	res.end(PAGE);
 });
 
+if (PUSH_ON) loadPush();
+
 server.listen(PORT, () => {
 	process.stdout.write(
 		`\n ▲ ALPHA TERMINAL web dashboard\n` +
 		`   local:   http://localhost:${PORT}\n` +
 		`   network: http://<your-ip>:${PORT}   (open this on your phone)\n` +
 		`   AI briefing: ${aiConfig().enabled ? aiConfig().mode + ' (' + aiConfig().model + ')' : 'off'}\n` +
+		`   phone push: ${PUSH_ON ? 'on (' + subscriptions.length + ' subscribed)' : 'off'}\n` +
 		`   refreshing every ${REFRESH_MS / 1000}s · ${BAR} bars\n\n`,
 	);
 	refresh();
@@ -282,13 +402,24 @@ let lastTs=0,seenAlert=0,alertsOn=localStorage.getItem('alertsOn')==='1';
 const bell=document.getElementById('bell');
 function paintBell(){bell.className='bell'+(alertsOn?' on':'');bell.textContent=alertsOn?'🔔 On':'🔔 Alerts';}
 paintBell();
+function u8(b64){const p='='.repeat((4-b64.length%4)%4);const s=(b64+p).replace(/-/g,'+').replace(/_/g,'/');const raw=atob(s);return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));}
+async function subscribePush(){
+  try{
+    const reg=await navigator.serviceWorker?.ready;if(!reg||!reg.pushManager)return;
+    const {key}=await (await fetch('/api/vapidPublicKey')).json();if(!key)return;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:u8(key)});
+    await fetch('/api/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(sub)});
+  }catch(e){/* push optional; in-app notifications still work */}
+}
 bell.onclick=async()=>{
   if(!alertsOn){
     if('Notification'in window && Notification.permission!=='granted'){try{await Notification.requestPermission();}catch(e){}}
-    alertsOn=true;localStorage.setItem('alertsOn','1');beep();
+    alertsOn=true;localStorage.setItem('alertsOn','1');beep();subscribePush();
   }else{alertsOn=false;localStorage.setItem('alertsOn','0');}
   paintBell();
 };
+if(alertsOn&&'Notification'in window&&Notification.permission==='granted')subscribePush();
 let actx;
 function beep(){try{actx=actx||new(window.AudioContext||window.webkitAudioContext)();const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.type='triangle';o.frequency.value=880;g.gain.setValueAtTime(.0001,actx.currentTime);g.gain.exponentialRampToValueAtTime(.25,actx.currentTime+.02);g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+.5);o.start();o.stop(actx.currentTime+.5);o.frequency.setValueAtTime(1320,actx.currentTime+.18);}catch(e){}}
 function flash(){const f=document.getElementById('flash');f.classList.add('go');setTimeout(()=>f.classList.remove('go'),160);}
