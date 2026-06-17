@@ -17,6 +17,9 @@ import {verdict} from './lib/signals.js';
 import {briefing, aiConfig} from './lib/ai.js';
 import {scanStocks} from './lib/stocks.js';
 import {generateVapidKeys, sendNotification} from './lib/webpush.js';
+import {dispatch as dispatchWebhooks, webhooksEnabled} from './lib/webhooks.js';
+import {getCandles} from './lib/okx.js';
+import {analyze} from './lib/signals.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const BAR = process.env.ALPHA_BAR || '5m';
@@ -119,6 +122,7 @@ function consider(kind, rows) {
 		});
 		if (alerts.length > 50) alerts.shift();
 		pushToAll(alerts[alerts.length - 1]);
+		dispatchWebhooks(alerts[alerts.length - 1]);
 	}
 }
 
@@ -235,6 +239,44 @@ const server = http.createServer((req, res) => {
 		return;
 	}
 
+	if (path === '/api/coin') {
+		const sym = (req.url.split('?')[1] || '').match(/sym=([A-Za-z0-9]+)/)?.[1];
+		const instId = sym ? `${sym.toUpperCase()}-USDT` : null;
+		if (!instId) {
+			res.writeHead(400);
+			res.end('{"error":"sym required"}');
+			return;
+		}
+
+		getCandles(instId, BAR, 120)
+			.then(candles => {
+				const t = snapshot?.tickers.find(x => x.instId === instId);
+				const s = analyze(instId, t || {volUsd24h: 1e9, changePct24h: 0}, candles);
+				if (!s) {
+					res.writeHead(404);
+					res.end('{"error":"no data"}');
+					return;
+				}
+
+				res.writeHead(200, {'content-type': 'application/json', 'cache-control': 'no-store'});
+				res.end(JSON.stringify({
+					sym: s.base, last: s.last, bar: BAR,
+					changePct24h: s.changePct24h, rsi: s.rsi, atrPct: s.atrPct,
+					roc5: s.roc5, roc15: s.roc15, roc30: s.roc30, volZ: s.volZ,
+					macd: s.macd, slope: s.slope, trendUp: s.trendUp, squeeze: s.squeeze,
+					buyScore: s.buyScore, explosionScore: s.explosionScore,
+					stop: s.stop, target1: s.target1, target2: s.target2,
+					volUsd24h: s.volUsd24h, verdict: verdict(s),
+					closes: s.closes.slice(-90),
+				}));
+			})
+			.catch(error => {
+				res.writeHead(502);
+				res.end(JSON.stringify({error: error.message}));
+			});
+		return;
+	}
+
 	if (path === '/api/vapidPublicKey') {
 		res.writeHead(200, {'content-type': 'application/json', 'cache-control': 'no-store'});
 		res.end(JSON.stringify({key: PUSH_ON && vapid ? vapid.publicKey : null}));
@@ -301,6 +343,7 @@ server.listen(PORT, () => {
 		`   network: http://<your-ip>:${PORT}   (open this on your phone)\n` +
 		`   AI briefing: ${aiConfig().enabled ? aiConfig().mode + ' (' + aiConfig().model + ')' : 'off'}\n` +
 		`   phone push: ${PUSH_ON ? 'on (' + subscriptions.length + ' subscribed)' : 'off'}\n` +
+		`   webhooks: ${webhooksEnabled() ? 'on' : 'off'}\n` +
 		`   refreshing every ${REFRESH_MS / 1000}s · ${BAR} bars\n\n`,
 	);
 	refresh();
@@ -357,6 +400,15 @@ td{padding:6px;border-bottom:1px solid #161d29;white-space:nowrap}
 .alert{display:flex;gap:10px;align-items:center;padding:6px 4px;border-bottom:1px solid #211c10}
 .alert .b{font-weight:700;min-width:64px}
 .alert .k{font-size:10px;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+tr.tap{cursor:pointer}tr.tap:hover td{background:#16202e}
+.modal{position:fixed;inset:0;background:#0008;backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:60;padding:14px}
+.modal.show{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:540px;width:100%;padding:16px;max-height:90vh;overflow:auto}
+.card h3{margin:0 0 2px;font-size:18px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin:10px 0;font-size:13px}
+.grid .k{color:var(--dim)}
+.chart{display:block;width:100%;height:90px;margin:8px 0;background:#0c121c;border-radius:8px}
+.x{float:right;cursor:pointer;color:var(--dim);font-size:20px;line-height:1}
 .flash{position:fixed;inset:0;pointer-events:none;background:var(--mag);opacity:0;transition:opacity .12s;z-index:50}
 .flash.go{opacity:.18}
 @keyframes blink{50%{opacity:.4}}
@@ -377,6 +429,7 @@ td{padding:6px;border-bottom:1px solid #161d29;white-space:nowrap}
   <div class="panel"><h2 style="color:var(--lime)">📈 BUY NOW <span class="dim">confirmed momentum</span></h2><div id="buys"></div></div>
   <div class="panel" id="stocksWrap" style="display:none"><h2 style="color:var(--cyan)">📊 STOCKS MOVING <span class="dim" id="stkState"></span></h2><div id="stocks"></div></div>
 </main>
+<div class="modal" id="modal"><div class="card" id="card"></div></div>
 <div class="foot"><span class="live"></span> auto-updating · <span id="age"></span> · signals are probabilistic — <b>NOT financial advice</b></div>
 <script>
 const SPARK='▁▂▃▄▅▆▇█';
@@ -386,9 +439,9 @@ const usd=n=>!n?'—':n>=1e9?'$'+(n/1e9).toFixed(1)+'B':n>=1e6?'$'+(n/1e6).toFix
 function spark(a){if(!a||!a.length)return'';const mn=Math.min(...a),mx=Math.max(...a),r=(mx-mn)||1;const up=a[a.length-1]>=a[0];return '<span class="spark '+(up?'up':'down')+'">'+a.map(v=>SPARK[Math.round((v-mn)/r*7)]).join('')+'</span>';}
 const tagColor=t=>({IGNITION:'var(--mag)','STRONG BUY':'var(--lime)',BUY:'var(--green)',COILING:'var(--cyan)',ACCUMULATE:'var(--yel)',OVEREXTENDED:'var(--orange)'}[t]||'var(--dim)');
 function meter(s){const c=s>=70?'var(--lime)':s>=50?'var(--yel)':s>=30?'var(--orange)':'var(--dim)';return '<span class="meter"><i style="width:'+s+'%;background:'+c+'"></i></span>'+s;}
-function rows(list,key){if(!list||!list.length)return '<div class="dim">— nothing clears the threshold right now —</div>';
+function rows(list,key,tap){if(!list||!list.length)return '<div class="dim">— nothing clears the threshold right now —</div>';
   let h='<table><thead><tr><th>SYM</th><th>PRICE</th><th>24h</th><th class="hideSm">RSI</th><th class="hideSm">VOLσ</th><th>SCORE</th><th>SIGNAL</th><th class="hideSm">TREND</th></tr></thead><tbody>';
-  for(const s of list){h+='<tr><td class="sym">'+s.base+'</td><td>$'+fmtP(s.last)+'</td><td>'+pct(s.changePct24h)+'</td>'+
+  for(const s of list){h+='<tr'+(tap?' class="tap" data-sym="'+s.base+'"':'')+'><td class="sym">'+s.base+'</td><td>$'+fmtP(s.last)+'</td><td>'+pct(s.changePct24h)+'</td>'+
     '<td class="hideSm">'+(s.rsi==null?'—':s.rsi.toFixed(0))+'</td><td class="hideSm">'+(s.volZ==null?'—':s.volZ.toFixed(1))+'</td>'+
     '<td>'+meter(s[key])+'</td><td><span class="tag" style="color:'+tagColor(s.tag)+'">'+s.tag+'</span></td>'+
     '<td class="hideSm">'+spark(s.spark)+'</td></tr>';}
@@ -461,8 +514,8 @@ async function tick(){
     const fw=document.getElementById('focusWrap');
     if(d.focus){fw.style.display='';document.getElementById('focusTitle').innerHTML='★ TOP CONVICTION RIGHT NOW';document.getElementById('focus').innerHTML=focusCard(d.focus);}else fw.style.display='none';
     if(d.ai){document.getElementById('aiWrap').style.display='';document.getElementById('brief').textContent=d.ai.text;document.getElementById('aiMeta').textContent=d.ai.ts?new Date(d.ai.ts).toLocaleTimeString():'';}
-    document.getElementById('booms').innerHTML=rows(d.booms,'explosionScore');
-    document.getElementById('buys').innerHTML=rows(d.buys,'buyScore');
+    document.getElementById('booms').innerHTML=rows(d.booms,'explosionScore',true);
+    document.getElementById('buys').innerHTML=rows(d.buys,'buyScore',true);
     const sw=document.getElementById('stocksWrap');
     if(d.stocks){sw.style.display='';
       document.getElementById('stkState').textContent=d.stocks.pending?'loading…':('market '+(d.stocks.marketState||'')+' · sorted by today’s move');
@@ -472,6 +525,41 @@ async function tick(){
   }catch(e){/* keep last frame on transient error */}
 }
 function ageTick(){if(lastTs)document.getElementById('age').textContent='updated '+Math.max(0,Math.round((Date.now()-lastTs)/1000))+'s ago';}
+const modal=document.getElementById('modal');
+function closeModal(){modal.classList.remove('show');}
+modal.onclick=e=>{if(e.target===modal)closeModal();};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+document.addEventListener('click',e=>{
+  if(e.target.classList&&e.target.classList.contains('x')){closeModal();return;}
+  const tr=e.target.closest&&e.target.closest('tr.tap');if(tr)openCoin(tr.dataset.sym);
+});
+function svgChart(a){if(!a||a.length<2)return'';const w=500,h=90,mn=Math.min(...a),mx=Math.max(...a),r=(mx-mn)||1;
+  const pts=a.map((v,i)=>(i/(a.length-1)*w).toFixed(1)+','+(h-((v-mn)/r)*(h-8)-4).toFixed(1)).join(' ');
+  const up=a[a.length-1]>=a[0];const col=up?'#3ddc84':'#ff5d6c';
+  return '<svg class="chart" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none"><polyline fill="none" stroke="'+col+'" stroke-width="2" points="'+pts+'"/></svg>';}
+async function openCoin(sym){
+  const card=document.getElementById('card');
+  card.innerHTML='<span class="x">×</span><h3>'+sym+'/USDT</h3><div class="dim">loading…</div>';
+  modal.classList.add('show');
+  try{
+    const d=await(await fetch('/api/coin?sym='+encodeURIComponent(sym))).json();
+    if(d.error){card.querySelector('.dim').textContent=d.error;return;}
+    const v=d.verdict||['',''];const row=(k,val)=>'<div class="k">'+k+'</div><div>'+val+'</div>';
+    card.innerHTML='<span class="x">×</span>'+
+      '<h3>'+d.sym+'/USDT <span style="font-size:13px" class="dim">'+d.bar+'</span></h3>'+
+      '<div>$'+fmtP(d.last)+' '+pct(d.changePct24h)+' &nbsp; <span class="tag" style="color:'+tagColor(v[0])+'">'+v[0]+'</span> <span class="dim">'+v[1]+'</span></div>'+
+      svgChart(d.closes)+
+      '<div class="grid">'+
+        row('Buy score',meter(d.buyScore))+row('Explosion',meter(d.explosionScore))+
+        row('RSI(14)',d.rsi==null?'—':d.rsi.toFixed(1))+row('ATR %',d.atrPct==null?'—':d.atrPct.toFixed(2)+'%')+
+        row('Volume σ',d.volZ==null?'—':d.volZ.toFixed(2))+row('Squeeze',d.squeeze==null?'—':d.squeeze.toFixed(0)+'/100')+
+        row('MACD hist',d.macd==null?'—':d.macd.toFixed(4))+row('Trend',d.trendUp?'<span class="up">EMA up</span>':'<span class="down">EMA down</span>')+
+        row('ROC 5/15/30',[d.roc5,d.roc15,d.roc30].map(x=>x==null?'—':x.toFixed(1)+'%').join(' / '))+row('24h vol',usd(d.volUsd24h))+
+      '</div>'+
+      '<div class="row"><span>entry <b>$'+fmtP(d.last)+'</b></span><span class="down">stop $'+fmtP(d.stop)+'</span><span class="up">tgt1 $'+fmtP(d.target1)+'</span><span class="up">tgt2 $'+fmtP(d.target2)+'</span></div>'+
+      '<div class="dim" style="margin-top:8px;font-size:12px">probabilistic signal — not financial advice</div>';
+  }catch(e){card.querySelector('.dim')&&(card.querySelector('.dim').textContent='failed to load');}
+}
 tick();setInterval(tick,4000);setInterval(ageTick,1000);
 if('serviceWorker'in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
 </script></body></html>`;

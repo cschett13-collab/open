@@ -131,6 +131,14 @@ the whole feature with `ALPHA_PUSH=off`.
 
 - A 30-min per-symbol cooldown prevents spam.
 - Alerts also stream at `GET /api/alerts`; dead subscriptions are auto-pruned.
+
+**Also push to Discord / Telegram:** set `ALPHA_DISCORD_WEBHOOK`, or
+`ALPHA_TELEGRAM_TOKEN` + `ALPHA_TELEGRAM_CHAT` (see `.env.example`). The same
+alerts fan out to those channels alongside phone push.
+
+**Tap any crypto row** in the dashboard to open a detail card: full indicator
+readout (RSI, ATR, MACD, EMA trend, volume-σ, squeeze, ROC), a price chart, and
+the trade levels.
 - Tune sensitivity (or test it) with env vars:
 
 | Variable                  | Default  | Meaning                                  |
@@ -179,6 +187,11 @@ ALPHA_BT_BAR=1H ALPHA_BT_HORIZON=6 ALPHA_BT_BARS=800 ALPHA_BT_SYMBOLS=20 node ba
 It prints, per conviction threshold and per score decile, the average/median
 forward return, win rate, and **edge vs the all-bars baseline**. A monotonic rise
 (higher score → higher return & win rate) means real edge on that window.
+
+It also runs an **out-of-sample check**: it "learns" the best threshold on the
+first 70% of history, then judges that threshold on the last 30% it never saw. If
+the edge persists on the unseen split, the signal isn't just curve-fit to one
+window; if it collapses, the report says so plainly.
 
 > **Read it honestly:** this is *in-sample* on recent data, ignores fees and
 > slippage, and extreme buckets have few samples (treat them as noise). It's a

@@ -51,6 +51,31 @@ function summarize(samples, key, threshold) {
 	};
 }
 
+function evalAt(samples, key, threshold) {
+	const hits = samples.filter(s => s[key] >= threshold).map(s => s.ret);
+	const base = samples.map(s => s.ret);
+	return {
+		threshold,
+		count: hits.length,
+		avgRet: mean(hits),
+		winRate: winRate(hits),
+		edge: mean(hits) - mean(base),
+	};
+}
+
+// "Learn" the best threshold on the train split (maximize avg forward return
+// among thresholds with enough samples), then report how it does out-of-sample.
+function chooseThreshold(trainSamples, key, minCount = 25) {
+	let best = null;
+	for (let th = 40; th <= 80; th += 5) {
+		const e = evalAt(trainSamples, key, th);
+		if (e.count < minCount) continue;
+		if (!best || e.avgRet > best.avgRet) best = e;
+	}
+
+	return best ? best.threshold : 55;
+}
+
 export async function backtest({
 	bar = '15m',
 	horizon = 8, // bars forward (8 × 15m = 2h)
@@ -78,7 +103,16 @@ export async function backtest({
 	);
 
 	const all = [];
-	for (const r of perSymbol) if (r) all.push(...r.samples);
+	// Chronological train/test split per symbol (samples are time-ordered).
+	const trainAll = [];
+	const testAll = [];
+	for (const r of perSymbol) {
+		if (!r) continue;
+		all.push(...r.samples);
+		const cut = Math.floor(r.samples.length * 0.7);
+		trainAll.push(...r.samples.slice(0, cut));
+		testAll.push(...r.samples.slice(cut));
+	}
 
 	const baseline = {avgRet: mean(all.map(s => s.ret)), winRate: winRate(all.map(s => s.ret)), count: all.length};
 
@@ -94,12 +128,31 @@ export async function backtest({
 		deciles.push({range: `${lo}-${hi}`, count: rets.length, avgRet: mean(rets), winRate: winRate(rets)});
 	}
 
+	// Out-of-sample validation: pick threshold on train, judge it on test.
+	const buyTh = chooseThreshold(trainAll, 'buy');
+	const boomTh = chooseThreshold(trainAll, 'boom');
+	const oos = {
+		buy: {
+			threshold: buyTh,
+			train: evalAt(trainAll, 'buy', buyTh),
+			test: evalAt(testAll, 'buy', buyTh),
+		},
+		boom: {
+			threshold: boomTh,
+			train: evalAt(trainAll, 'boom', boomTh),
+			test: evalAt(testAll, 'boom', boomTh),
+		},
+		trainBaseline: {avgRet: mean(trainAll.map(s => s.ret)), winRate: winRate(trainAll.map(s => s.ret)), count: trainAll.length},
+		testBaseline: {avgRet: mean(testAll.map(s => s.ret)), winRate: winRate(testAll.map(s => s.ret)), count: testAll.length},
+	};
+
 	return {
 		params: {bar, horizon, bars, symbols: tickers.length, warmup, horizonLabel: `${horizon}×${bar}`},
 		baseline,
 		buyBuckets,
 		boomBuckets,
 		deciles,
+		oos,
 		perSymbol: perSymbol.filter(Boolean).map(r => ({base: r.base, n: r.samples.length})),
 	};
 }

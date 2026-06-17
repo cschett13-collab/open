@@ -71,6 +71,25 @@ async function main() {
 		);
 	}
 
+	// Out-of-sample: did the threshold learned on train survive on unseen test data?
+	const o = r.oos;
+	console.log('\n' + color('🧪 OUT-OF-SAMPLE (threshold learned on first 70%, judged on last 30%)', c.bold + c.white));
+	const oosLine = (label, sel) => {
+		const tr = sel.train, te = sel.test;
+		console.log(
+			'  ' + label.padEnd(11) + color(`@≥${sel.threshold}`, c.dim) +
+			'   train edge ' + pct(tr.edge) + ` (win ${tr.winRate.toFixed(1)}%, n=${tr.count})` +
+			'   →   test edge ' + pct(te.edge) + ` (win ${te.winRate.toFixed(1)}%, n=${te.count})`,
+		);
+	};
+
+	oosLine('BUY-NOW', o.buy);
+	oosLine('EXPLOSION', o.boom);
+	const survived = o.buy.test.edge > 0;
+	console.log('  ' + (survived
+		? color('✓ edge persisted out-of-sample — not just curve-fit on this window', c.lime)
+		: color('✗ edge did NOT hold out-of-sample on this window — treat signals with caution', c.orange)));
+
 	console.log('\n' + color(' Read it honestly: if higher thresholds/deciles show higher avg returns &', c.dim));
 	console.log(color(' win rates than baseline, the engine has edge on this window. If not, it', c.dim));
 	console.log(color(' does not — markets shift. In-sample, fees ignored. NOT financial advice.', c.dim) + '\n');
