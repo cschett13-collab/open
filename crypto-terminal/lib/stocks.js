@@ -9,10 +9,16 @@ import {pool} from './okx.js';
 
 // Liquid, high-attention, high-beta names — the stuff that actually moves.
 export const WATCHLIST = [
+	// Mega-cap / AI / semis
 	'NVDA', 'TSLA', 'AAPL', 'AMD', 'MSFT', 'AMZN', 'META', 'GOOGL', 'NFLX', 'AVGO',
-	'PLTR', 'COIN', 'MSTR', 'MARA', 'RIOT', 'SMCI', 'SOFI', 'HOOD', 'INTC', 'MU',
-	'BABA', 'SHOP', 'UBER', 'DKNG', 'CRWD', 'SNOW', 'ARM', 'DELL', 'CVNA', 'AFRM',
-	'TSM', 'QCOM', 'NIO', 'LCID', 'RIVN', 'BAC', 'F', 'DIS', 'PYPL', 'GME',
+	'TSM', 'QCOM', 'MU', 'ARM', 'SMCI', 'INTC', 'DELL', 'MRVL', 'ASML', 'CRM',
+	// High-beta / momentum / retail favorites
+	'PLTR', 'COIN', 'MSTR', 'MARA', 'RIOT', 'SOFI', 'HOOD', 'CVNA', 'AFRM', 'GME',
+	'AMC', 'DKNG', 'CRWD', 'SNOW', 'NET', 'DDOG', 'RBLX', 'UPST', 'ROKU', 'ABNB',
+	// EVs / China / movers
+	'NIO', 'LCID', 'RIVN', 'BABA', 'PDD', 'XPEV', 'LI', 'UBER', 'SHOP', 'PYPL',
+	// Index / sector ETFs for regime context
+	'SPY', 'QQQ', 'IWM', 'SMH', 'ARKK',
 ];
 
 const agent = new https.Agent({keepAlive: true, maxSockets: 12});

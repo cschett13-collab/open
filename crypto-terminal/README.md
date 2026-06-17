@@ -110,6 +110,29 @@ even offline (live data still needs a connection).
 > Tip: phones cache the app shell via a service worker, so it pops open
 > immediately. To rebuild the icons, run `node lib/icon-gen.mjs`.
 
+## 🔔 Live alerts → phone notifications
+
+The web app has a real-time alert engine. When a symbol crosses into **IGNITION**
+(pre-breakout) or **STRONG BUY** (confirmed momentum) — for **crypto or stocks** —
+it fires an alert. In the installed PWA, tap **🔔 Alerts** once to grant
+permission and you'll get **phone notifications** (with a sound + on-screen flash)
+even when the app is backgrounded. Tapping a notification opens the app.
+
+- A 30-min per-symbol cooldown prevents spam.
+- Alerts also stream at `GET /api/alerts`.
+- Tune sensitivity (or test it) with env vars:
+
+| Variable                  | Default  | Meaning                                  |
+|---------------------------|----------|------------------------------------------|
+| `ALPHA_ALERT_IGNITION`    | `70`     | Explosion score that triggers IGNITION   |
+| `ALPHA_ALERT_BUY`         | `72`     | Buy score that triggers STRONG BUY       |
+| `ALPHA_ALERT_COOLDOWN_MS` | `1800000`| Per-symbol cooldown between alerts        |
+
+```bash
+# more sensitive alerts:
+ALPHA_ALERT_IGNITION=60 ALPHA_ALERT_BUY=64 node server.js
+```
+
 ## 🧠 Connect your own local AI (optional)
 
 The app can ask a model **running on your machine** to write a short "desk analyst"

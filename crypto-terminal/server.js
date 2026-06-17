@@ -29,10 +29,48 @@ let stocks = null;
 let briefingText = null;
 let lastError = null;
 
+// --- Real-time alert engine -------------------------------------------------
+// Fire an alert when a symbol crosses into a high-conviction state. Cooldown
+// prevents spamming the same idea; the PWA turns these into phone notifications.
+const ALERT_COOLDOWN_MS = Number(process.env.ALPHA_ALERT_COOLDOWN_MS || 30 * 60_000);
+const ALERT_IGNITION = Number(process.env.ALPHA_ALERT_IGNITION || 70);
+const ALERT_BUY = Number(process.env.ALPHA_ALERT_BUY || 72);
+const alerts = []; // newest-last, capped
+const lastFired = new Map(); // key -> ts
+let alertSeq = 0;
+
+function consider(kind, rows) {
+	const now = Date.now();
+	for (const s of rows) {
+		const tag = verdict(s)[0];
+		const hot =
+			(s.explosionScore >= ALERT_IGNITION && 'IGNITION') ||
+			(s.buyScore >= ALERT_BUY && 'STRONG BUY') ||
+			null;
+		if (!hot) continue;
+		const key = `${kind}:${s.base}:${hot}`;
+		if (now - (lastFired.get(key) || 0) < ALERT_COOLDOWN_MS) continue;
+		lastFired.set(key, now);
+		alerts.push({
+			id: ++alertSeq,
+			kind,
+			sym: s.base,
+			tag: hot,
+			score: hot === 'IGNITION' ? s.explosionScore : s.buyScore,
+			price: s.last,
+			changePct: s.changePct24h,
+			why: verdict(s)[1],
+			ts: now,
+		});
+		if (alerts.length > 50) alerts.shift();
+	}
+}
+
 async function refresh() {
 	try {
 		snapshot = await scan({bar: BAR, top: TOP});
 		lastError = null;
+		consider('crypto', [...snapshot.booms, ...snapshot.buys]);
 		if (aiConfig().enabled) {
 			briefing(snapshot).then(text => {
 				if (text) briefingText = {text, ts: Date.now()};
@@ -47,6 +85,7 @@ async function refreshStocks() {
 	if (!STOCKS_ON) return;
 	try {
 		stocks = await scanStocks();
+		consider('stock', [...stocks.booms, ...stocks.buys]);
 	} catch {
 		/* keep last stock snapshot on transient error */
 	}
@@ -82,6 +121,7 @@ function payload() {
 			movers: stocks.movers.slice(0, 12).map(slim),
 			booms: stocks.booms.slice(0, 8).map(slim),
 		} : (STOCKS_ON ? {pending: true} : null),
+		alerts: alerts.slice(-12).reverse(),
 		error: lastError,
 	};
 }
@@ -109,6 +149,12 @@ const server = http.createServer((req, res) => {
 	if (path === '/api/signals') {
 		res.writeHead(200, {'content-type': 'application/json', 'cache-control': 'no-store'});
 		res.end(JSON.stringify(payload()));
+		return;
+	}
+
+	if (path === '/api/alerts') {
+		res.writeHead(200, {'content-type': 'application/json', 'cache-control': 'no-store'});
+		res.end(JSON.stringify({alerts: alerts.slice(-50).reverse()}));
 		return;
 	}
 
@@ -185,12 +231,26 @@ td{padding:6px;border-bottom:1px solid #161d29;white-space:nowrap}
 .live{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:p 1.6s infinite}
 @keyframes p{0%,100%{opacity:1}50%{opacity:.3}}
 @media(max-width:560px){.hideSm{display:none}td,th{padding:5px 4px}}
+.bell{float:right;background:#16202e;color:var(--yel);border:1px solid var(--line);border-radius:8px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
+.bell.on{color:#0a0e14;background:var(--yel);border-color:var(--yel);font-weight:700}
+.alertsPanel{border-color:#3a3320;background:linear-gradient(180deg,#1b1708,#12100a)}
+.alert{display:flex;gap:10px;align-items:center;padding:6px 4px;border-bottom:1px solid #211c10}
+.alert .b{font-weight:700;min-width:64px}
+.alert .k{font-size:10px;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+.flash{position:fixed;inset:0;pointer-events:none;background:var(--mag);opacity:0;transition:opacity .12s;z-index:50}
+.flash.go{opacity:.18}
+@keyframes blink{50%{opacity:.4}}
+.bell.on{animation:none}
 </style></head><body>
 <header>
-  <h1>▲ <span class="cyan">ALPHA TERMINAL</span> <span class="dim">live crypto momentum desk</span></h1>
+  <h1>▲ <span class="cyan">ALPHA TERMINAL</span> <span class="dim hideSm">live momentum desk</span>
+    <button id="bell" class="bell" title="Enable phone alerts">🔔 Alerts</button>
+  </h1>
   <div class="row" id="topbar"><span class="dim">connecting…</span></div>
 </header>
+<div id="flash" class="flash"></div>
 <main>
+  <div class="panel alertsPanel" id="alertsWrap" style="display:none"><h2 style="color:var(--yel)">🔔 LIVE ALERTS</h2><div id="alerts"></div></div>
   <div class="panel focus" id="focusWrap" style="display:none"><h2 id="focusTitle"></h2><div id="focus"></div></div>
   <div class="panel" id="aiWrap" style="display:none"><h2>🧠 AI Desk Briefing <span class="dim" id="aiMeta"></span></h2><div class="brief" id="brief"></div></div>
   <div class="panel"><h2 style="color:var(--mag)">🚀 ABOUT TO EXPLODE <span class="dim">volume + squeeze pre-breakout</span></h2><div id="booms"></div></div>
@@ -218,7 +278,45 @@ function focusCard(f){if(!f)return '';
   '<div class="row" style="margin-top:6px"><span>entry <b>$'+fmtP(f.last)+'</b></span><span class="down">stop $'+fmtP(f.stop)+'</span>'+
   '<span class="up">tgt1 $'+fmtP(f.target1)+'</span><span class="up">tgt2 $'+fmtP(f.target2)+'</span><span class="dim">vol '+usd(f.volUsd24h)+'</span></div>';}
 const regColor=s=>s>=60?'var(--lime)':s>=45?'var(--yel)':s>=30?'var(--orange)':'var(--red)';
-let lastTs=0;
+let lastTs=0,seenAlert=0,alertsOn=localStorage.getItem('alertsOn')==='1';
+const bell=document.getElementById('bell');
+function paintBell(){bell.className='bell'+(alertsOn?' on':'');bell.textContent=alertsOn?'🔔 On':'🔔 Alerts';}
+paintBell();
+bell.onclick=async()=>{
+  if(!alertsOn){
+    if('Notification'in window && Notification.permission!=='granted'){try{await Notification.requestPermission();}catch(e){}}
+    alertsOn=true;localStorage.setItem('alertsOn','1');beep();
+  }else{alertsOn=false;localStorage.setItem('alertsOn','0');}
+  paintBell();
+};
+let actx;
+function beep(){try{actx=actx||new(window.AudioContext||window.webkitAudioContext)();const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.type='triangle';o.frequency.value=880;g.gain.setValueAtTime(.0001,actx.currentTime);g.gain.exponentialRampToValueAtTime(.25,actx.currentTime+.02);g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+.5);o.start();o.stop(actx.currentTime+.5);o.frequency.setValueAtTime(1320,actx.currentTime+.18);}catch(e){}}
+function flash(){const f=document.getElementById('flash');f.classList.add('go');setTimeout(()=>f.classList.remove('go'),160);}
+async function notify(a){
+  const title='🚀 '+a.sym+' — '+a.tag;
+  const body=(a.kind==='stock'?'Stock':'Crypto')+' · '+(a.score)+'/100 · $'+fmtP(a.price)+' ('+(a.changePct>=0?'+':'')+a.changePct.toFixed(1)+'%) · '+a.why;
+  try{const reg=await navigator.serviceWorker?.ready;if(reg&&reg.showNotification){reg.showNotification(title,{body,icon:'/icons/icon-192.png',badge:'/icons/icon-192.png',tag:'alpha-'+a.id,renotify:true});return;}}catch(e){}
+  try{if(Notification.permission==='granted')new Notification(title,{body,icon:'/icons/icon-192.png'});}catch(e){}
+}
+function renderAlerts(list){
+  const w=document.getElementById('alertsWrap');
+  if(!list||!list.length){w.style.display='none';return;}
+  w.style.display='';
+  document.getElementById('alerts').innerHTML=list.map(a=>{
+    const c=a.tag==='IGNITION'?'var(--mag)':'var(--lime)';const ago=Math.max(0,Math.round((Date.now()-a.ts)/1000));
+    return '<div class="alert"><span class="b" style="color:'+c+'">'+a.sym+'</span>'+
+      '<span class="k">'+(a.kind==='stock'?'STK':'CRY')+'</span>'+
+      '<span style="color:'+c+'">'+a.tag+'</span>'+
+      '<span>'+a.score+'/100</span><span class="dim hideSm">$'+fmtP(a.price)+'</span>'+
+      '<span style="margin-left:auto" class="dim">'+(ago<60?ago+'s':Math.round(ago/60)+'m')+' ago</span></div>';
+  }).join('');
+}
+function handleAlerts(list){
+  if(!list)return;renderAlerts(list);
+  const fresh=list.filter(a=>a.id>seenAlert);
+  if(seenAlert>0&&fresh.length&&alertsOn){fresh.slice(0,3).forEach(notify);beep();flash();}
+  for(const a of list)if(a.id>seenAlert)seenAlert=a.id;
+}
 async function tick(){
   try{
     const d=await (await fetch('/api/signals',{cache:'no-store'})).json();
@@ -239,6 +337,7 @@ async function tick(){
       document.getElementById('stkState').textContent=d.stocks.pending?'loading…':('market '+(d.stocks.marketState||'')+' · sorted by today’s move');
       document.getElementById('stocks').innerHTML=d.stocks.pending?'<div class="dim">fetching live equities…</div>':rows(d.stocks.movers,'buyScore');
     }else sw.style.display='none';
+    handleAlerts(d.alerts);
   }catch(e){/* keep last frame on transient error */}
 }
 function ageTick(){if(lastTs)document.getElementById('age').textContent='updated '+Math.max(0,Math.round((Date.now()-lastTs)/1000))+'s ago';}

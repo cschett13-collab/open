@@ -4,7 +4,7 @@
 //     and opens even with no connection.
 //   • Live data (/api/*) -> network-only (never serve stale prices); the page
 //     keeps its last in-memory frame if a fetch fails.
-const CACHE = 'alpha-shell-v1';
+const CACHE = 'alpha-shell-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', event => {
@@ -43,4 +43,18 @@ self.addEventListener('fetch', event => {
 
 	// Static assets: cache-first.
 	event.respondWith(caches.match(request).then(hit => hit || fetch(request)));
+});
+
+// Tapping an alert focuses the app (or opens it if closed).
+self.addEventListener('notificationclick', event => {
+	event.notification.close();
+	event.waitUntil(
+		self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(list => {
+			for (const client of list) {
+				if ('focus' in client) return client.focus();
+			}
+
+			return self.clients.openWindow('/');
+		}),
+	);
 });
