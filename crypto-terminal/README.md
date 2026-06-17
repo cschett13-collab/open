@@ -112,6 +112,45 @@ ALPHA_AI=openai ALPHA_AI_MODEL=local-model \
 > the same PC as your model (or point `ALPHA_AI_URL` at it on your LAN). A remote
 > cloud session cannot reach a model on your home computer.
 
+## 📊 Stocks too (not just crypto)
+
+The dashboard and `scan.js` also show a **STOCKS MOVING** panel — live US-equity
+movers run through the *same* momentum/explosion engine, sorted by the day's move.
+Data comes from Yahoo Finance's public chart endpoint (no key). Edit the
+`WATCHLIST` in `lib/stocks.js` to track your own names. Disable with
+`ALPHA_STOCKS=off`. (Stocks only move during US market hours — off-hours the
+panel goes quiet, which is expected.)
+
+## 🖥️ Run it on your NAS / home server (with your RTX 5090)
+
+Drop the folder on any box that runs Docker (Synology, TrueNAS, Unraid, a Linux
+home server) and bring it up:
+
+```bash
+docker compose up -d
+# then open http://<nas-ip>:8787 on your phone or PC
+```
+
+`docker-compose.yml` starts two services:
+
+- **alpha** — the web dashboard on port `8787`.
+- **ollama** — a local LLM server with your **RTX 5090 passed through** for the
+  AI briefing. The GPU doesn't fetch data (the internet does that) — it runs the
+  model that writes the desk note.
+
+After first start, pull a model into Ollama once:
+
+```bash
+docker exec -it ollama ollama pull llama3
+```
+
+GPU passthrough needs the **NVIDIA Container Toolkit** on the host. If you don't
+want AI, set `ALPHA_AI: "off"` in `docker-compose.yml` and you can delete the
+`ollama` service entirely.
+
+> Everything runs on **your** hardware and network — the app, the data fetching,
+> and the model. Nothing depends on the cloud session that generated this code.
+
 ---
 
 ## How the signals actually work
@@ -154,16 +193,19 @@ Each idea shows a **mechanical** entry / ATR-based stop (1.5×) and two targets
 
 ```
 crypto-terminal/
-├── index.js          live TUI: fast price loop + rotating deep-scan loop
-├── server.js         web dashboard (HTTP + JSON API) for phone/PC browsers
-├── scan.js           one-shot ranked snapshot
+├── index.js            live TUI: fast price loop + rotating deep-scan loop
+├── server.js           web dashboard (HTTP + JSON API) for phone/PC browsers
+├── scan.js             one-shot ranked snapshot
+├── Dockerfile          tiny zero-dep image
+├── docker-compose.yml  NAS deploy: app + Ollama (RTX 5090 GPU)
 └── lib/
-    ├── okx.js        zero-dep OKX client (keep-alive, bounded concurrency)
-    ├── indicators.js RSI, EMA, ATR, Bollinger width, slope, MACD, z-score…
-    ├── signals.js    scoring engine (buy / explosion / regime / verdict)
-    ├── engine.js     shared scan() used by terminal, web, and snapshot
-    ├── ai.js         optional local-AI briefing (Ollama / OpenAI-compatible)
-    └── render.js     ANSI colors, sparklines, meters, layout helpers
+    ├── okx.js          zero-dep OKX client (keep-alive, bounded concurrency)
+    ├── stocks.js       live US-equity movers via Yahoo (same signal engine)
+    ├── indicators.js   RSI, EMA, ATR, Bollinger width, slope, MACD, z-score…
+    ├── signals.js      scoring engine (buy / explosion / regime / verdict)
+    ├── engine.js       shared scan() used by terminal, web, and snapshot
+    ├── ai.js           optional local-AI briefing (Ollama / OpenAI-compatible)
+    └── render.js       ANSI colors, sparklines, meters, layout helpers
 ```
 
 **Why it feels live with no lag:** two independent loops. A cheap ~1.5s call

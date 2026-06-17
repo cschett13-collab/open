@@ -8,6 +8,7 @@ import process from 'node:process';
 import {scan} from './lib/engine.js';
 import {verdict} from './lib/signals.js';
 import {briefing, aiConfig} from './lib/ai.js';
+import {scanStocks} from './lib/stocks.js';
 import {c, color, fmtPrice, fmtPct, meter, sparkline} from './lib/render.js';
 
 const BAR = process.env.ALPHA_BAR || '5m';
@@ -48,6 +49,16 @@ async function main() {
 
 	table('🚀 ABOUT TO EXPLODE  (volume + squeeze pre-breakout)', booms, 'explosionScore', c.magenta);
 	table('📈 BUY NOW  (confirmed momentum)', buys, 'buyScore', c.lime);
+
+	if ((process.env.ALPHA_STOCKS || 'on').toLowerCase() !== 'off') {
+		process.stderr.write('Fetching live equities…\n');
+		try {
+			const st = await scanStocks();
+			table(`📊 STOCKS MOVING  (market ${st.marketState}, by today's move)`, st.movers.slice(0, 10), 'buyScore', c.cyan);
+		} catch {
+			console.log('\n' + color('  (stock feed unreachable)', c.dim));
+		}
+	}
 
 	if (aiConfig().enabled) {
 		process.stderr.write('\nAsking local AI for a briefing…\n');

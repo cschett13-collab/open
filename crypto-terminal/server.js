@@ -14,13 +14,17 @@ import http from 'node:http';
 import {scan} from './lib/engine.js';
 import {verdict} from './lib/signals.js';
 import {briefing, aiConfig} from './lib/ai.js';
+import {scanStocks} from './lib/stocks.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const BAR = process.env.ALPHA_BAR || '5m';
 const TOP = Number(process.env.ALPHA_TOP || 60);
 const REFRESH_MS = Number(process.env.ALPHA_REFRESH_MS || 15_000);
+const STOCKS_MS = Number(process.env.ALPHA_STOCKS_MS || 30_000);
+const STOCKS_ON = (process.env.ALPHA_STOCKS || 'on').toLowerCase() !== 'off';
 
 let snapshot = null;
+let stocks = null;
 let briefingText = null;
 let lastError = null;
 
@@ -35,6 +39,15 @@ async function refresh() {
 		}
 	} catch (error) {
 		lastError = error.message;
+	}
+}
+
+async function refreshStocks() {
+	if (!STOCKS_ON) return;
+	try {
+		stocks = await scanStocks();
+	} catch {
+		/* keep last stock snapshot on transient error */
 	}
 }
 
@@ -62,6 +75,12 @@ function payload() {
 		buys: snapshot.buys.slice(0, 12).map(slim),
 		markets: snapshot.tickers.length,
 		ai: aiConfig().enabled ? (briefingText || {text: 'generating…', ts: 0}) : null,
+		stocks: stocks ? {
+			marketState: stocks.marketState,
+			ts: stocks.ts,
+			movers: stocks.movers.slice(0, 12).map(slim),
+			booms: stocks.booms.slice(0, 8).map(slim),
+		} : (STOCKS_ON ? {pending: true} : null),
 		error: lastError,
 	};
 }
@@ -93,6 +112,8 @@ server.listen(PORT, () => {
 	);
 	refresh();
 	setInterval(refresh, REFRESH_MS);
+	refreshStocks();
+	setInterval(refreshStocks, STOCKS_MS);
 });
 
 // ---------------------------------------------------------------------------
@@ -140,6 +161,7 @@ td{padding:6px;border-bottom:1px solid #161d29;white-space:nowrap}
   <div class="panel" id="aiWrap" style="display:none"><h2>🧠 AI Desk Briefing <span class="dim" id="aiMeta"></span></h2><div class="brief" id="brief"></div></div>
   <div class="panel"><h2 style="color:var(--mag)">🚀 ABOUT TO EXPLODE <span class="dim">volume + squeeze pre-breakout</span></h2><div id="booms"></div></div>
   <div class="panel"><h2 style="color:var(--lime)">📈 BUY NOW <span class="dim">confirmed momentum</span></h2><div id="buys"></div></div>
+  <div class="panel" id="stocksWrap" style="display:none"><h2 style="color:var(--cyan)">📊 STOCKS MOVING <span class="dim" id="stkState"></span></h2><div id="stocks"></div></div>
 </main>
 <div class="foot"><span class="live"></span> auto-updating · <span id="age"></span> · signals are probabilistic — <b>NOT financial advice</b></div>
 <script>
@@ -178,6 +200,11 @@ async function tick(){
     if(d.ai){document.getElementById('aiWrap').style.display='';document.getElementById('brief').textContent=d.ai.text;document.getElementById('aiMeta').textContent=d.ai.ts?new Date(d.ai.ts).toLocaleTimeString():'';}
     document.getElementById('booms').innerHTML=rows(d.booms,'explosionScore');
     document.getElementById('buys').innerHTML=rows(d.buys,'buyScore');
+    const sw=document.getElementById('stocksWrap');
+    if(d.stocks){sw.style.display='';
+      document.getElementById('stkState').textContent=d.stocks.pending?'loading…':('market '+(d.stocks.marketState||'')+' · sorted by today’s move');
+      document.getElementById('stocks').innerHTML=d.stocks.pending?'<div class="dim">fetching live equities…</div>':rows(d.stocks.movers,'buyScore');
+    }else sw.style.display='none';
   }catch(e){/* keep last frame on transient error */}
 }
 function ageTick(){if(lastTs)document.getElementById('age').textContent='updated '+Math.max(0,Math.round((Date.now()-lastTs)/1000))+'s ago';}
