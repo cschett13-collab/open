@@ -16,6 +16,7 @@
 import process from 'node:process';
 import {getAllSpotTickers, getCandles, pool} from './lib/okx.js';
 import {analyze, verdict, marketRegime} from './lib/signals.js';
+import {briefing, aiConfig} from './lib/ai.js';
 import * as R from './lib/render.js';
 import {c, color} from './lib/render.js';
 
@@ -37,6 +38,7 @@ const state = {
 	tapeOffset: 0,
 	status: 'starting…',
 	error: undefined,
+	briefing: undefined,
 	startedAt: Date.now(),
 };
 
@@ -84,6 +86,16 @@ async function deepScan() {
 		state.analyses = rows.filter(Boolean);
 		state.lastDeep = Date.now();
 		state.status = 'live';
+
+		// Optional: ask the local AI for a written briefing (async, non-blocking).
+		if (aiConfig().enabled) {
+			const booms = topBy('explosionScore', 5);
+			const buys = topBy('buyScore', 5);
+			const focus = booms.find(s => s.explosionScore >= 60) || buys.find(s => s.buyScore >= 60) || booms[0] || buys[0];
+			briefing({regime: state.regime, booms, buys, focus, bar: BAR}).then(text => {
+				if (text) state.briefing = {text, ts: Date.now()};
+			});
+		}
 	} catch (error) {
 		state.error = `scan: ${error.message}`;
 	} finally {
@@ -94,6 +106,26 @@ async function deepScan() {
 // ---------------------------------------------------------------------------
 // Rendering
 // ---------------------------------------------------------------------------
+
+// Word-wrap plain text to a width (used for the AI briefing block).
+function wrap(text, width) {
+	const lines = [];
+	for (const para of String(text).split('\n')) {
+		let line = '';
+		for (const word of para.split(/\s+/)) {
+			if ((line + ' ' + word).trim().length > width) {
+				if (line) lines.push(line.trim());
+				line = word;
+			} else {
+				line += ' ' + word;
+			}
+		}
+
+		if (line.trim()) lines.push(line.trim());
+	}
+
+	return lines;
+}
 
 function topBy(key, n, extraFilter = () => true) {
 	return [...state.analyses]
@@ -294,6 +326,14 @@ function draw() {
 	out.push(header(width));
 	out.push('');
 	out.push(...focusCard(width));
+	if (state.briefing) {
+		out.push('');
+		out.push(color('  🧠 AI DESK BRIEFING', c.bold + c.cyan) + color(`  ${new Date(state.briefing.ts).toLocaleTimeString('en-US', {hour12: false})}`, c.dim));
+		for (const ln of wrap(state.briefing.text, width - 4).slice(0, 6)) {
+			out.push('  ' + color(ln, c.gray));
+		}
+	}
+
 	out.push('');
 	out.push(...tradePanel('🚀 ABOUT TO EXPLODE  (volume + squeeze pre-breakout)', booms, 'explosionScore', width, c.magenta));
 	out.push('');

@@ -9,7 +9,8 @@
 	},
 	"scripts": {
 		"start": "node index.js",
-		"scan": "node scan.js"
+		"scan": "node scan.js",
+		"web": "node server.js"
 	},
 	"engines": {
 		"node": ">=18"

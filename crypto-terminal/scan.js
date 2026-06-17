@@ -1,16 +1,17 @@
 #!/usr/bin/env node
-// One-shot scanner: prints a ranked snapshot and exits. No alt-screen, no loop.
-// Useful for piping, logging, cron, or terminals without raw-mode TTY.
+// One-shot scanner: prints a ranked snapshot (and an AI briefing if configured)
+// then exits. Useful for piping, logging, cron, or no-TTY environments.
 //
 // NOT FINANCIAL ADVICE — probabilistic signals from real price/volume only.
 
 import process from 'node:process';
-import {getAllSpotTickers, getCandles, pool} from './lib/okx.js';
-import {analyze, verdict, marketRegime} from './lib/signals.js';
-import {c, color, fmtPrice, fmtPct, fmtUsd, meter, sparkline} from './lib/render.js';
+import {scan} from './lib/engine.js';
+import {verdict} from './lib/signals.js';
+import {briefing, aiConfig} from './lib/ai.js';
+import {c, color, fmtPrice, fmtPct, meter, sparkline} from './lib/render.js';
 
 const BAR = process.env.ALPHA_BAR || '5m';
-const TOP_LIQUID = Number(process.env.ALPHA_TOP || 60);
+const TOP = Number(process.env.ALPHA_TOP || 60);
 
 function table(title, rows, key, accent) {
 	console.log('\n' + color(title, c.bold + accent));
@@ -20,7 +21,7 @@ function table(title, rows, key, accent) {
 		return;
 	}
 
-	for (const s of rows) {
+	for (const s of rows.slice(0, 10)) {
 		const [tag] = verdict(s);
 		console.log(
 			'  ' + color(s.base.padEnd(9), c.bold + c.white) +
@@ -36,31 +37,29 @@ function table(title, rows, key, accent) {
 
 async function main() {
 	process.stderr.write('Fetching live OKX market data…\n');
-	const tickers = (await getAllSpotTickers()).filter(t => t.quote === 'USDT' && t.last > 0);
-	const reg = marketRegime(tickers);
-
-	const universe = tickers
-		.filter(t => t.volUsd24h > 2_000_000)
-		.sort((a, b) => b.volUsd24h - a.volUsd24h)
-		.slice(0, TOP_LIQUID);
-
-	const rows = (await pool(
-		universe,
-		async t => analyze(t.instId, t, await getCandles(t.instId, BAR, 120)),
-		6,
-	)).filter(Boolean);
+	const snap = await scan({bar: BAR, top: TOP});
+	const {regime: reg, booms, buys} = snap;
 
 	console.log(color('\n ▲ ALPHA TERMINAL — snapshot ' + new Date().toLocaleString(), c.bold + c.cyan));
 	console.log(
 		'   regime ' + color(reg.label, c.yellow) + color(` (${reg.score}/100)`, c.dim) +
-		`   advancers ${reg.advancers}/${reg.total}   ${BAR} bars   ${rows.length} markets scanned`,
+		`   advancers ${reg.advancers}/${reg.total}   ${BAR} bars   ${snap.rows.length} markets scanned`,
 	);
-
-	const booms = [...rows].filter(s => s.explosionScore >= 30).sort((a, b) => b.explosionScore - a.explosionScore).slice(0, 10);
-	const buys = [...rows].filter(s => s.buyScore >= 35).sort((a, b) => b.buyScore - a.buyScore).slice(0, 10);
 
 	table('🚀 ABOUT TO EXPLODE  (volume + squeeze pre-breakout)', booms, 'explosionScore', c.magenta);
 	table('📈 BUY NOW  (confirmed momentum)', buys, 'buyScore', c.lime);
+
+	if (aiConfig().enabled) {
+		process.stderr.write('\nAsking local AI for a briefing…\n');
+		const text = await briefing(snap);
+		if (text) {
+			console.log('\n' + color('🧠 AI DESK BRIEFING', c.bold + c.cyan));
+			console.log(color('─'.repeat(78), c.gray));
+			console.log(text.split('\n').map(l => '  ' + l).join('\n'));
+		} else {
+			console.log('\n' + color('  (local AI unreachable — check ALPHA_AI settings)', c.dim));
+		}
+	}
 
 	console.log('\n' + color(' signals are probabilistic — NOT financial advice. DYOR.', c.dim) + '\n');
 }

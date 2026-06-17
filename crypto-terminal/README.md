@@ -47,25 +47,70 @@ Requires Node.js 18+.
 ```bash
 cd crypto-terminal
 
-# Live updating terminal dashboard (press q to quit, r to force a rescan)
+# 1) Live updating terminal dashboard (press q to quit, r to force a rescan)
 node index.js
 # or:  npm start
 
-# One-shot ranked snapshot (great for logging / no-TTY environments)
+# 2) Web dashboard — open from your PHONE or PC browser (see "Phone + PC" below)
+node server.js
+# or:  npm run web      then visit http://<your-ip>:8787
+
+# 3) One-shot ranked snapshot (great for logging / no-TTY environments)
 node scan.js
 # or:  npm run scan
 ```
 
 Optional config via env vars:
 
-| Variable     | Default | Meaning                                   |
-|--------------|---------|-------------------------------------------|
-| `ALPHA_BAR`  | `5m`    | Candle timeframe (`1m`,`5m`,`15m`,`1H`…)  |
-| `ALPHA_TOP`  | `60`    | How many top-liquidity markets to scan    |
+| Variable           | Default | Meaning                                          |
+|--------------------|---------|--------------------------------------------------|
+| `ALPHA_BAR`        | `5m`    | Candle timeframe (`1m`,`5m`,`15m`,`1H`…)          |
+| `ALPHA_TOP`        | `60`    | How many top-liquidity markets to scan           |
+| `PORT`             | `8787`  | Web dashboard port (`server.js`)                 |
+| `ALPHA_REFRESH_MS` | `15000` | Server-side rescan cadence for the web dashboard |
+| `ALPHA_AI`         | `off`   | Local-AI briefing: `off` / `ollama` / `openai`   |
+| `ALPHA_AI_MODEL`   | —       | Model name (e.g. `llama3`)                        |
+| `ALPHA_AI_URL`     | —       | Override the AI endpoint URL                      |
+| `ALPHA_AI_KEY`     | —       | Bearer key, if your endpoint needs one           |
 
 ```bash
 ALPHA_BAR=15m ALPHA_TOP=80 node index.js
 ```
+
+---
+
+## 📱 Phone + PC access (web dashboard)
+
+Run the web server **on your own machine**, then open it from any device on the
+same Wi-Fi/LAN — phone, tablet, second PC:
+
+```bash
+npm run web          # or: node server.js
+```
+
+It prints a URL. On your phone's browser go to `http://<your-computer-ip>:8787`
+(find your IP with `ipconfig` on Windows or `ifconfig`/`ip addr` on macOS/Linux).
+The page is mobile-first, dark, and auto-refreshes — same signals as the terminal,
+plus the AI briefing if enabled. One server can feed many devices at once.
+
+## 🧠 Connect your own local AI (optional)
+
+The app can ask a model **running on your machine** to write a short "desk analyst"
+briefing over the live signals. It's **off by default** and only narrates the
+quantitative output — it never invents prices.
+
+```bash
+# Ollama (https://ollama.com) — start it, pull a model, then:
+ALPHA_AI=ollama ALPHA_AI_MODEL=llama3 node server.js
+
+# LM Studio / llama.cpp / vLLM (OpenAI-compatible endpoint):
+ALPHA_AI=openai ALPHA_AI_MODEL=local-model \
+  ALPHA_AI_URL=http://localhost:1234/v1/chat/completions node index.js
+```
+
+> **Note:** the AI must be reachable from wherever the app runs. Run the app on
+> the same PC as your model (or point `ALPHA_AI_URL` at it on your LAN). A remote
+> cloud session cannot reach a model on your home computer.
 
 ---
 
@@ -110,11 +155,14 @@ Each idea shows a **mechanical** entry / ATR-based stop (1.5×) and two targets
 ```
 crypto-terminal/
 ├── index.js          live TUI: fast price loop + rotating deep-scan loop
+├── server.js         web dashboard (HTTP + JSON API) for phone/PC browsers
 ├── scan.js           one-shot ranked snapshot
 └── lib/
     ├── okx.js        zero-dep OKX client (keep-alive, bounded concurrency)
     ├── indicators.js RSI, EMA, ATR, Bollinger width, slope, MACD, z-score…
     ├── signals.js    scoring engine (buy / explosion / regime / verdict)
+    ├── engine.js     shared scan() used by terminal, web, and snapshot
+    ├── ai.js         optional local-AI briefing (Ollama / OpenAI-compatible)
     └── render.js     ANSI colors, sparklines, meters, layout helpers
 ```
 
