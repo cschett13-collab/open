@@ -8,14 +8,33 @@
 # local LLM that writes the desk briefing. Set ALPHA_AI=off below to skip AI.
 
 services:
+  caddy:
+    image: caddy:2
+    container_name: alpha-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Set ALPHA_DOMAIN in a .env file. Defaults to localhost (self-signed cert).
+      ALPHA_DOMAIN: ${ALPHA_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - alpha
+
   alpha:
     build: .
     # Or pull a prebuilt image instead of building:
     # image: ghcr.io/<you>/alpha-terminal:latest
     container_name: alpha-terminal
     restart: unless-stopped
+    expose:
+      - "8787"          # internal: reached via the caddy proxy over HTTPS
     ports:
-      - "8787:8787"
+      - "8787:8787"     # optional: direct HTTP access on the LAN (remove if undesired)
     environment:
       PORT: "8787"
       ALPHA_BAR: "5m"
@@ -47,3 +66,5 @@ services:
 
 volumes:
   ollama-models:
+  caddy-data:
+  caddy-config:

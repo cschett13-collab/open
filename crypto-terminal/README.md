@@ -174,16 +174,34 @@ Drop the folder on any box that runs Docker (Synology, TrueNAS, Unraid, a Linux
 home server) and bring it up:
 
 ```bash
+cp .env.example .env     # edit ALPHA_DOMAIN etc.
 docker compose up -d
-# then open http://<nas-ip>:8787 on your phone or PC
+# open https://<your-domain>  (or http://<nas-ip>:8787 for plain HTTP)
 ```
 
-`docker-compose.yml` starts two services:
+`docker-compose.yml` starts three services:
 
-- **alpha** — the web dashboard on port `8787`.
+- **caddy** — reverse proxy that terminates **HTTPS** (ports 80/443). Required so
+  the PWA installs and phone push works (browsers need a secure context).
+- **alpha** — the web dashboard (port `8787`, proxied by Caddy).
 - **ollama** — a local LLM server with your **RTX 5090 passed through** for the
   AI briefing. The GPU doesn't fetch data (the internet does that) — it runs the
   model that writes the desk note.
+
+### HTTPS so push works from anywhere
+
+Installable PWAs and Web Push require a secure context. Pick one:
+
+- **Own a domain** → set `ALPHA_DOMAIN=alpha.example.com` in `.env`, point its DNS
+  at your network, forward ports 80/443. Caddy fetches a trusted **Let's Encrypt**
+  cert automatically. Open `https://alpha.example.com` and install.
+- **No domain (LAN only)** → leave `ALPHA_DOMAIN=localhost` (or a LAN IP). Caddy
+  serves a **self-signed** cert from its internal CA; install Caddy's root CA on
+  your phone (it's saved in the `caddy-data` volume) to make it trusted.
+- **Easiest, no domain, valid certs** → use **Tailscale**: `tailscale serve https / http://localhost:8787`
+  gives every device a real HTTPS hostname on your private tailnet — push works
+  with no port-forwarding. (Run the app with `npm run web` or via compose and
+  point `tailscale serve` at it.)
 
 After first start, pull a model into Ollama once:
 
@@ -244,7 +262,10 @@ crypto-terminal/
 ├── server.js           web dashboard (HTTP + JSON API) for phone/PC browsers
 ├── scan.js             one-shot ranked snapshot
 ├── Dockerfile          tiny zero-dep image
-├── docker-compose.yml  NAS deploy: app + Ollama (RTX 5090 GPU)
+├── docker-compose.yml  NAS deploy: Caddy(HTTPS) + app + Ollama (RTX 5090 GPU)
+├── Caddyfile           auto-HTTPS reverse proxy
+├── .env.example        deployment config
+├── manifest.webmanifest / sw.js / icons/   installable PWA assets
 └── lib/
     ├── okx.js          zero-dep OKX client (keep-alive, bounded concurrency)
     ├── stocks.js       live US-equity movers via Yahoo (same signal engine)
@@ -252,6 +273,7 @@ crypto-terminal/
     ├── signals.js      scoring engine (buy / explosion / regime / verdict)
     ├── engine.js       shared scan() used by terminal, web, and snapshot
     ├── ai.js           optional local-AI briefing (Ollama / OpenAI-compatible)
+    ├── webpush.js      zero-dep Web Push (VAPID + aes128gcm)
     └── render.js       ANSI colors, sparklines, meters, layout helpers
 ```
 

@@ -1,0 +1,15 @@
+# Caddy reverse proxy → automatic HTTPS for Alpha Terminal.
+# Browsers only allow installable PWAs + Web Push over a secure context, so this
+# terminates TLS and proxies to the app.
+#
+# ALPHA_DOMAIN controls the cert behavior (set it in .env):
+#   • a real domain you own (e.g. alpha.example.com) → Caddy auto-provisions a
+#     trusted Let's Encrypt cert (needs ports 80/443 reachable + DNS pointed here).
+#   • localhost or a LAN IP (the default) → Caddy issues a local self-signed cert
+#     from its internal CA. Install Caddy's root CA on your phone to make it
+#     trusted, or use Tailscale (see README) for valid certs with no domain.
+
+{$ALPHA_DOMAIN} {
+	encode gzip
+	reverse_proxy alpha:8787
+}
