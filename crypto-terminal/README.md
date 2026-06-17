@@ -93,6 +93,23 @@ It prints a URL. On your phone's browser go to `http://<your-computer-ip>:8787`
 The page is mobile-first, dark, and auto-refreshes — same signals as the terminal,
 plus the AI briefing if enabled. One server can feed many devices at once.
 
+## 📲 Install it as an app on your phone (PWA)
+
+The dashboard is an installable **Progressive Web App** — served straight from
+your NAS/PC, no App Store, works on iPhone and Android. It gets a home-screen
+icon, launches fullscreen (no browser chrome), and the shell opens instantly
+even offline (live data still needs a connection).
+
+1. Start the server (`npm run web` or `docker compose up -d`).
+2. On your phone's browser, open `http://<your-ip>:8787`.
+3. Install it:
+   - **iPhone (Safari):** Share → **Add to Home Screen**.
+   - **Android (Chrome):** ⋮ menu → **Install app** / **Add to Home screen**.
+4. Launch it from the new ▲ icon — it runs like a native app.
+
+> Tip: phones cache the app shell via a service worker, so it pops open
+> immediately. To rebuild the icons, run `node lib/icon-gen.mjs`.
+
 ## 🧠 Connect your own local AI (optional)
 
 The app can ask a model **running on your machine** to write a short "desk analyst"

@@ -11,6 +11,7 @@
 
 import process from 'node:process';
 import http from 'node:http';
+import {readFileSync} from 'node:fs';
 import {scan} from './lib/engine.js';
 import {verdict} from './lib/signals.js';
 import {briefing, aiConfig} from './lib/ai.js';
@@ -85,16 +86,42 @@ function payload() {
 	};
 }
 
+// Small static assets for the installable PWA, read from disk once at boot.
+const here = new URL('.', import.meta.url);
+const readBin = p => {
+	try {
+		return readFileSync(new URL(p, here));
+	} catch {
+		return null;
+	}
+};
+
+const ASSETS = {
+	'/manifest.webmanifest': {body: readBin('manifest.webmanifest'), type: 'application/manifest+json'},
+	'/sw.js': {body: readBin('sw.js'), type: 'text/javascript'},
+	'/icons/icon-192.png': {body: readBin('icons/icon-192.png'), type: 'image/png'},
+	'/icons/icon-512.png': {body: readBin('icons/icon-512.png'), type: 'image/png'},
+};
+
 const server = http.createServer((req, res) => {
-	if (req.url === '/api/signals') {
+	const path = req.url.split('?')[0];
+
+	if (path === '/api/signals') {
 		res.writeHead(200, {'content-type': 'application/json', 'cache-control': 'no-store'});
 		res.end(JSON.stringify(payload()));
 		return;
 	}
 
-	if (req.url === '/healthz') {
+	if (path === '/healthz') {
 		res.writeHead(200, {'content-type': 'text/plain'});
 		res.end('ok');
+		return;
+	}
+
+	const asset = ASSETS[path];
+	if (asset && asset.body) {
+		res.writeHead(200, {'content-type': asset.type, 'cache-control': 'public, max-age=86400'});
+		res.end(asset.body);
 		return;
 	}
 
@@ -121,8 +148,15 @@ server.listen(PORT, () => {
 // ---------------------------------------------------------------------------
 const PAGE = `<!doctype html><html lang="en"><head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0a0e14">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Alpha">
 <title>▲ Alpha Terminal</title>
 <style>
 :root{--bg:#0a0e14;--panel:#111722;--line:#1e2633;--dim:#5b6b80;--txt:#d6e1f0;--green:#3ddc84;--lime:#76ff7a;--red:#ff5d6c;--mag:#ff79e1;--cyan:#54d6ff;--yel:#ffd166;--orange:#ff9e57}
@@ -209,4 +243,5 @@ async function tick(){
 }
 function ageTick(){if(lastTs)document.getElementById('age').textContent='updated '+Math.max(0,Math.round((Date.now()-lastTs)/1000))+'s ago';}
 tick();setInterval(tick,4000);setInterval(ageTick,1000);
+if('serviceWorker'in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
 </script></body></html>`;
