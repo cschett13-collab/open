@@ -1,0 +1,28 @@
+{
+	"name": "alpha-terminal",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Live crypto momentum & breakout scanner that runs in your terminal. Real-time signals for what's strong now and what's coiling to explode.",
+	"type": "module",
+	"bin": {
+		"alpha-terminal": "./index.js"
+	},
+	"scripts": {
+		"start": "node index.js",
+		"scan": "node scan.js"
+	},
+	"engines": {
+		"node": ">=18"
+	},
+	"keywords": [
+		"crypto",
+		"terminal",
+		"tui",
+		"trading",
+		"momentum",
+		"signals",
+		"breakout",
+		"okx"
+	],
+	"license": "MIT"
+}

@@ -1,0 +1,71 @@
+#!/usr/bin/env node
+// One-shot scanner: prints a ranked snapshot and exits. No alt-screen, no loop.
+// Useful for piping, logging, cron, or terminals without raw-mode TTY.
+//
+// NOT FINANCIAL ADVICE — probabilistic signals from real price/volume only.
+
+import process from 'node:process';
+import {getAllSpotTickers, getCandles, pool} from './lib/okx.js';
+import {analyze, verdict, marketRegime} from './lib/signals.js';
+import {c, color, fmtPrice, fmtPct, fmtUsd, meter, sparkline} from './lib/render.js';
+
+const BAR = process.env.ALPHA_BAR || '5m';
+const TOP_LIQUID = Number(process.env.ALPHA_TOP || 60);
+
+function table(title, rows, key, accent) {
+	console.log('\n' + color(title, c.bold + accent));
+	console.log(color('─'.repeat(78), c.gray));
+	if (rows.length === 0) {
+		console.log(color('  (nothing clears the threshold right now)', c.dim));
+		return;
+	}
+
+	for (const s of rows) {
+		const [tag] = verdict(s);
+		console.log(
+			'  ' + color(s.base.padEnd(9), c.bold + c.white) +
+			('$' + fmtPrice(s.last)).padEnd(13) +
+			fmtPct(s.changePct24h).padEnd(18) +
+			' rsi ' + String((s.rsi ?? 0).toFixed(0)).padStart(3) +
+			'  ' + meter(s[key], 8) + ' ' + String(s[key]).padStart(3) +
+			'  ' + color(tag.padEnd(12), accent) +
+			sparkline(s.closes, 14),
+		);
+	}
+}
+
+async function main() {
+	process.stderr.write('Fetching live OKX market data…\n');
+	const tickers = (await getAllSpotTickers()).filter(t => t.quote === 'USDT' && t.last > 0);
+	const reg = marketRegime(tickers);
+
+	const universe = tickers
+		.filter(t => t.volUsd24h > 2_000_000)
+		.sort((a, b) => b.volUsd24h - a.volUsd24h)
+		.slice(0, TOP_LIQUID);
+
+	const rows = (await pool(
+		universe,
+		async t => analyze(t.instId, t, await getCandles(t.instId, BAR, 120)),
+		6,
+	)).filter(Boolean);
+
+	console.log(color('\n ▲ ALPHA TERMINAL — snapshot ' + new Date().toLocaleString(), c.bold + c.cyan));
+	console.log(
+		'   regime ' + color(reg.label, c.yellow) + color(` (${reg.score}/100)`, c.dim) +
+		`   advancers ${reg.advancers}/${reg.total}   ${BAR} bars   ${rows.length} markets scanned`,
+	);
+
+	const booms = [...rows].filter(s => s.explosionScore >= 30).sort((a, b) => b.explosionScore - a.explosionScore).slice(0, 10);
+	const buys = [...rows].filter(s => s.buyScore >= 35).sort((a, b) => b.buyScore - a.buyScore).slice(0, 10);
+
+	table('🚀 ABOUT TO EXPLODE  (volume + squeeze pre-breakout)', booms, 'explosionScore', c.magenta);
+	table('📈 BUY NOW  (confirmed momentum)', buys, 'buyScore', c.lime);
+
+	console.log('\n' + color(' signals are probabilistic — NOT financial advice. DYOR.', c.dim) + '\n');
+}
+
+main().catch(error => {
+	console.error('Error:', error.message);
+	process.exit(1);
+});

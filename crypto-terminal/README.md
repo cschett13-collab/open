@@ -1,0 +1,127 @@
+# ▲ ALPHA TERMINAL
+
+> Your quant desk in the terminal. A **live, zero-latency crypto momentum & breakout scanner** that tells you what's strong **right now** and what's **coiling to explode** — built from real price/volume structure, not vibes.
+
+It runs entirely in your terminal, repaints continuously, and uses **zero npm dependencies** (pure Node + the OKX public API — no API key, no install step).
+
+```
+ ▲ ALPHA TERMINAL  live crypto momentum desk                 ⣾ 16:50:24
+  BTC $65,918 +0.23%   ETH $1,773 -0.38%   REGIME GREED / RISK-ON 73/100   adv 17/24
+
+  ★ TOP CONVICTION RIGHT NOW
+  HYPE/USDT  STRONG BUY (74/100)  confirmed momentum, trend intact
+  entry $75.72   stop $73.10   tgt1 $79.20   tgt2 $84.10   vol $310.4M
+
+  🚀 ABOUT TO EXPLODE  (volume + squeeze pre-breakout)
+  ... ranked table with RSI, volume-σ, score meters, sparklines ...
+
+  📈 BUY NOW  (confirmed momentum)
+  ... ranked table ...
+
+  TAPE  XPL ▲31.6% · ASTER ▲14.2% · ENA ▲11.0% · ...
+```
+
+---
+
+## ⚠️ Read this first — NOT financial advice
+
+**This tool does not predict the future. Nobody can.** What it does is measure
+*real, observable* market structure — momentum, trend, volatility compression,
+and abnormal volume — and rank coins by how closely they match historically
+interesting setups. These are **probabilistic edges, not guarantees.**
+
+- Signals are **right sometimes and wrong sometimes.** Breakouts fail. Trends reverse.
+- Crypto is extremely volatile and **can go to zero.**
+- This is **not** financial, investment, or trading advice.
+- **Only risk what you can afford to lose.** Always do your own research.
+
+The scoring is intentionally conservative: when the market is calm, the
+"ABOUT TO EXPLODE" panel will be **empty** rather than inventing a signal.
+
+---
+
+## Run it
+
+Requires Node.js 18+.
+
+```bash
+cd crypto-terminal
+
+# Live updating terminal dashboard (press q to quit, r to force a rescan)
+node index.js
+# or:  npm start
+
+# One-shot ranked snapshot (great for logging / no-TTY environments)
+node scan.js
+# or:  npm run scan
+```
+
+Optional config via env vars:
+
+| Variable     | Default | Meaning                                   |
+|--------------|---------|-------------------------------------------|
+| `ALPHA_BAR`  | `5m`    | Candle timeframe (`1m`,`5m`,`15m`,`1H`…)  |
+| `ALPHA_TOP`  | `60`    | How many top-liquidity markets to scan    |
+
+```bash
+ALPHA_BAR=15m ALPHA_TOP=80 node index.js
+```
+
+---
+
+## How the signals actually work
+
+Everything is computed from live OHLCV candles. No black box — read `lib/`.
+
+### `BUY NOW` score — *confirmed momentum*
+Ride trends that are already working, without chasing blow-off tops:
+
+- **Linear-regression slope** of price (trend direction & strength)
+- **EMA(9) > EMA(21)** trend alignment
+- **MACD histogram** positive (momentum confirmation)
+- **Rate-of-change** over 15 bars (real, recent gains)
+- **RSI** rewarded in the 50–62 zone, **penalized above ~72** (avoid late chases)
+- **Volume z-score** (participation must confirm the move)
+
+### `ABOUT TO EXPLODE` score — *pre-breakout ignition*
+The hard part: catching coins **before** the big candle, not after.
+
+- **Volatility squeeze** — current Bollinger-band width vs. its recent self.
+  Compression precedes expansion (the "coiled spring").
+- **Volume ignition** — volume z-score spiking 1.5–4σ above its baseline. This
+  is the trigger that turns a quiet base into a move.
+- **Momentum just turning up** — short-window acceleration off the base.
+- **Penalties** for already-overbought RSI and coins that already ran 25%+
+  (those have *already* exploded — not "about to").
+
+### Market regime
+A breadth-based fear/greed proxy: % of liquid markets advancing + average
+24h change across the board → `EXTREME FEAR … EXTREME GREED`.
+
+### Trade geometry
+Each idea shows a **mechanical** entry / ATR-based stop (1.5×) and two targets
+(2× / 4× ATR) for context. They're a starting frame for your own risk plan —
+**not** instructions.
+
+---
+
+## Architecture
+
+```
+crypto-terminal/
+├── index.js          live TUI: fast price loop + rotating deep-scan loop
+├── scan.js           one-shot ranked snapshot
+└── lib/
+    ├── okx.js        zero-dep OKX client (keep-alive, bounded concurrency)
+    ├── indicators.js RSI, EMA, ATR, Bollinger width, slope, MACD, z-score…
+    ├── signals.js    scoring engine (buy / explosion / regime / verdict)
+    └── render.js     ANSI colors, sparklines, meters, layout helpers
+```
+
+**Why it feels live with no lag:** two independent loops. A cheap ~1.5s call
+pulls *all* spot tickers in one request (live prices, tape, regime), while a
+staggered deep loop fetches candles for the most liquid markets with bounded
+concurrency and re-ranks every ~20s. The whole frame is composed in memory and
+written in a single atomic repaint, so there's no flicker.
+
+Data source: [OKX public market API](https://www.okx.com/docs-v5/) — no key required.
