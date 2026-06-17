@@ -8,6 +8,7 @@
 		"alpha-terminal": "./index.js"
 	},
 	"scripts": {
+		"go": "node start.js",
 		"start": "node index.js",
 		"scan": "node scan.js",
 		"web": "node server.js"

@@ -44,8 +44,17 @@ The scoring is intentionally conservative: when the market is calm, the
 
 Requires Node.js 18+.
 
+> **Never coded before?** Read [`../START-HERE.md`](../START-HERE.md) instead —
+> install Node.js, then double-click `start-windows.cmd` (Windows) or run
+> `./start-mac-linux.sh` (Mac/Linux). It launches the web dashboard and keeps it
+> running **non-stop**, and prints the address to open on your phone.
+
 ```bash
 cd crypto-terminal
+
+# 0) Easiest: launch the web dashboard and keep it alive forever (auto-restarts)
+npm run go
+# or:  node start.js   (Windows: double-click start-windows.cmd)
 
 # 1) Live updating terminal dashboard (press q to quit, r to force a rescan)
 node index.js
