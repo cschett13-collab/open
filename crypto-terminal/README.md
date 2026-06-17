@@ -58,6 +58,10 @@ node server.js
 # 3) One-shot ranked snapshot (great for logging / no-TTY environments)
 node scan.js
 # or:  npm run scan
+
+# 4) Backtest the signals against real history (see "Does it actually work?")
+node backtest.js
+# or:  npm run backtest
 ```
 
 Optional config via env vars:
@@ -158,6 +162,34 @@ ALPHA_AI=openai ALPHA_AI_MODEL=local-model \
 > **Note:** the AI must be reachable from wherever the app runs. Run the app on
 > the same PC as your model (or point `ALPHA_AI_URL` at it on your LAN). A remote
 > cloud session cannot reach a model on your home computer.
+
+## 🔬 Does it actually work? Backtest it
+
+Don't take the signals on faith — `backtest.js` walks recent history bar-by-bar,
+computes each signal using **only data available at that moment**, then measures
+the **realized forward return** over a fixed horizon. If higher scores precede
+higher returns, the engine has edge; if not, they don't.
+
+```bash
+node backtest.js
+# or tune it:
+ALPHA_BT_BAR=1H ALPHA_BT_HORIZON=6 ALPHA_BT_BARS=800 ALPHA_BT_SYMBOLS=20 node backtest.js
+```
+
+It prints, per conviction threshold and per score decile, the average/median
+forward return, win rate, and **edge vs the all-bars baseline**. A monotonic rise
+(higher score → higher return & win rate) means real edge on that window.
+
+> **Read it honestly:** this is *in-sample* on recent data, ignores fees and
+> slippage, and extreme buckets have few samples (treat them as noise). It's a
+> sanity check on the engine, **not** a profit guarantee. Markets shift.
+
+| Env var            | Default | Meaning                              |
+|--------------------|---------|--------------------------------------|
+| `ALPHA_BT_BAR`     | `15m`   | Candle timeframe                     |
+| `ALPHA_BT_HORIZON` | `8`     | Bars forward to measure return       |
+| `ALPHA_BT_BARS`    | `600`   | History length per symbol            |
+| `ALPHA_BT_SYMBOLS` | `18`    | How many top-liquidity coins to test |
 
 ## 📊 Stocks too (not just crypto)
 
@@ -261,6 +293,7 @@ crypto-terminal/
 ├── index.js            live TUI: fast price loop + rotating deep-scan loop
 ├── server.js           web dashboard (HTTP + JSON API) for phone/PC browsers
 ├── scan.js             one-shot ranked snapshot
+├── backtest.js         walk-forward backtest of the signal engine
 ├── Dockerfile          tiny zero-dep image
 ├── docker-compose.yml  NAS deploy: Caddy(HTTPS) + app + Ollama (RTX 5090 GPU)
 ├── Caddyfile           auto-HTTPS reverse proxy
@@ -272,6 +305,7 @@ crypto-terminal/
     ├── indicators.js   RSI, EMA, ATR, Bollinger width, slope, MACD, z-score…
     ├── signals.js      scoring engine (buy / explosion / regime / verdict)
     ├── engine.js       shared scan() used by terminal, web, and snapshot
+    ├── backtest.js     walk-forward signal evaluation
     ├── ai.js           optional local-AI briefing (Ollama / OpenAI-compatible)
     ├── webpush.js      zero-dep Web Push (VAPID + aes128gcm)
     └── render.js       ANSI colors, sparklines, meters, layout helpers

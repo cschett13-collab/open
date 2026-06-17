@@ -89,6 +89,31 @@ export async function getCandles(instId, bar = '5m', limit = 120) {
 		.reverse();
 }
 
+// Paginated history: walk backwards with `after` to assemble up to `total`
+// chronological candles (the single-call endpoint caps at 300).
+export async function getCandlesPaged(instId, bar = '15m', total = 600) {
+	const out = [];
+	let after; // fetch records older than this ts
+	while (out.length < total) {
+		const q = `instId=${encodeURIComponent(instId)}&bar=${bar}&limit=300${after ? `&after=${after}` : ''}`;
+		// eslint-disable-next-line no-await-in-loop
+		const rows = await get(`/api/v5/market/candles?${q}`);
+		if (!rows || rows.length === 0) break;
+		for (const r of rows) {
+			out.push({
+				t: Number(r[0]), o: Number(r[1]), h: Number(r[2]),
+				l: Number(r[3]), c: Number(r[4]), vol: Number(r[5]), volCcy: Number(r[6]),
+			});
+		}
+
+		after = rows[rows.length - 1][0]; // oldest ts in this batch
+		if (rows.length < 300) break; // no more history
+	}
+
+	out.sort((a, b) => a.t - b.t); // chronological ascending
+	return out;
+}
+
 // Run promise-returning tasks with bounded concurrency so we never hammer the API.
 export async function pool(items, worker, concurrency = 6) {
 	const results = new Array(items.length);

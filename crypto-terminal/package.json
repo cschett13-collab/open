@@ -10,7 +10,8 @@
 	"scripts": {
 		"start": "node index.js",
 		"scan": "node scan.js",
-		"web": "node server.js"
+		"web": "node server.js",
+		"backtest": "node backtest.js"
 	},
 	"engines": {
 		"node": ">=18"
