@@ -82,6 +82,7 @@ export async function backtest({
 	bars = 600,
 	symbols = 18,
 	warmup = 60,
+	cost = 0.1, // round-trip cost in % (fees + slippage), applied to traded signals
 	onProgress = () => {},
 } = {}) {
 	const tickers = (await getAllSpotTickers())
@@ -147,7 +148,7 @@ export async function backtest({
 	};
 
 	return {
-		params: {bar, horizon, bars, symbols: tickers.length, warmup, horizonLabel: `${horizon}×${bar}`},
+		params: {bar, horizon, bars, symbols: tickers.length, warmup, cost, horizonLabel: `${horizon}×${bar}`},
 		baseline,
 		buyBuckets,
 		boomBuckets,

@@ -16,6 +16,7 @@ const opts = {
 	horizon: Number(process.env.ALPHA_BT_HORIZON || 8),
 	bars: Number(process.env.ALPHA_BT_BARS || 600),
 	symbols: Number(process.env.ALPHA_BT_SYMBOLS || 18),
+	cost: Number(process.env.ALPHA_BT_FEE_BPS || 10) / 100, // bps → %
 };
 
 const pct = (n, plus = true) => {
@@ -38,20 +39,23 @@ async function main() {
 	process.stderr.write('\n\n');
 
 	const p = r.params;
+	const net = g => g - p.cost; // subtract round-trip cost from a traded signal's gross return
 	console.log(color('▲ ALPHA TERMINAL — SIGNAL BACKTEST', c.bold + c.cyan));
 	console.log(color(`  ${p.symbols} symbols · ${p.bar} bars · forward horizon ${p.horizonLabel} · ${r.baseline.count.toLocaleString()} samples`, c.dim));
+	console.log(color(`  assumed cost: ${(p.cost).toFixed(2)}% round-trip (fees + slippage) — applied to traded signals below`, c.dim));
 	console.log(color('  baseline (every bar): ', c.gray) + `avg fwd ${pct(r.baseline.avgRet)}  ·  win ${r.baseline.winRate.toFixed(1)}%`);
 
 	const tbl = (title, buckets) => {
 		console.log('\n' + color(title, c.bold + c.white));
-		console.log(color('  thresh   samples   avg fwd ret   median    win%     edge vs baseline', c.gray));
+		console.log(color('  thresh   samples   gross ret   NET (after cost)   win%     edge vs baseline', c.gray));
 		for (const b of buckets) {
 			const edge = b.avgRet - r.baseline.avgRet;
+			const n = net(b.avgRet);
 			console.log(
 				'  ' + String('≥' + b.threshold).padEnd(8) +
 				String(b.count).padStart(7) + '   ' +
-				pct(b.avgRet).padStart(20) + '  ' +
-				pct(b.medRet).padStart(18) + '  ' +
+				pct(b.avgRet).padStart(18) + '   ' +
+				(n >= 0 ? color('+' + n.toFixed(3) + '%', c.lime) : color(n.toFixed(3) + '%', c.red)).padStart(24) + '   ' +
 				(b.winRate.toFixed(1) + '%').padStart(6) + '   ' +
 				(edge >= 0 ? color('+' + edge.toFixed(3) + '%', c.lime) : color(edge.toFixed(3) + '%', c.red)),
 			);
@@ -89,6 +93,11 @@ async function main() {
 	console.log('  ' + (survived
 		? color('✓ edge persisted out-of-sample — not just curve-fit on this window', c.lime)
 		: color('✗ edge did NOT hold out-of-sample on this window — treat signals with caution', c.orange)));
+
+	const netTest = net(o.buy.test.avgRet);
+	console.log('  ' + (netTest > 0
+		? color(`✓ BUY-NOW still NET POSITIVE out-of-sample after ${p.cost.toFixed(2)}% cost: ${'+' + netTest.toFixed(3)}%/trade`, c.lime)
+		: color(`✗ BUY-NOW is NET NEGATIVE out-of-sample after ${p.cost.toFixed(2)}% cost (${netTest.toFixed(3)}%/trade) — costs eat the edge`, c.orange)));
 
 	console.log('\n' + color(' Read it honestly: if higher thresholds/deciles show higher avg returns &', c.dim));
 	console.log(color(' win rates than baseline, the engine has edge on this window. If not, it', c.dim));

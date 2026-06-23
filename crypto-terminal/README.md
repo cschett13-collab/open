@@ -203,6 +203,13 @@ window; if it collapses, the report says so plainly.
 | `ALPHA_BT_HORIZON` | `8`     | Bars forward to measure return       |
 | `ALPHA_BT_BARS`    | `600`   | History length per symbol            |
 | `ALPHA_BT_SYMBOLS` | `18`    | How many top-liquidity coins to test |
+| `ALPHA_BT_FEE_BPS` | `10`    | Round-trip cost (bps) for net-of-cost realism |
+
+Every traded signal is shown both **gross** and **NET** of the assumed round-trip
+cost (fees + slippage), with an explicit verdict on whether the out-of-sample
+edge is still **net positive** after costs. Spoiler: on many windows it isn't —
+which is the honest truth about short-horizon signals, and exactly why this tool
+shows it instead of hiding it.
 
 ## 📊 Stocks too (not just crypto)
 
