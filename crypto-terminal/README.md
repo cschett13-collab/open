@@ -250,10 +250,23 @@ Installable PWAs and Web Push require a secure context. Pick one:
 - **No domain (LAN only)** → leave `ALPHA_DOMAIN=localhost` (or a LAN IP). Caddy
   serves a **self-signed** cert from its internal CA; install Caddy's root CA on
   your phone (it's saved in the `caddy-data` volume) to make it trusted.
-- **Easiest, no domain, valid certs** → use **Tailscale**: `tailscale serve https / http://localhost:8787`
-  gives every device a real HTTPS hostname on your private tailnet — push works
-  with no port-forwarding. (Run the app with `npm run web` or via compose and
-  point `tailscale serve` at it.)
+- **Easiest, no domain, valid certs → Tailscale (recommended).** A ready-made
+  compose file joins the app to **your** private tailnet and serves it at
+  `https://alpha.<your-tailnet>.ts.net` with a valid cert — reachable from any
+  device you own, anywhere, with **nothing exposed to the public internet** and
+  no port-forwarding. Push + PWA install just work.
+
+  ```bash
+  # 1) make an auth key: https://login.tailscale.com/admin/settings/keys
+  # 2) put TS_AUTHKEY=tskey-auth-... in .env
+  docker compose -f docker-compose.tailscale.yml up -d
+  # 3) open https://alpha.<your-tailnet>.ts.net on your phone → Add to Home Screen
+  ```
+
+  This replaces the Caddy stack (Tailscale provides the cert) and still runs the
+  Ollama/5090 AI service. The app binds only inside the Tailscale network
+  namespace — it is never published to your LAN or the internet. To run the
+  app directly (not in Docker) instead, use `tailscale serve --bg 8787`.
 
 After first start, pull a model into Ollama once:
 
