@@ -1,0 +1,69 @@
+# Tailscale deployment — joins YOUR tailnet and serves the app over HTTPS at
+# https://alpha.<your-tailnet>.ts.net, reachable from any device you own, with a
+# valid cert and zero port-forwarding. Nothing is exposed to the public internet.
+#
+#   1) Make an auth key:  https://login.tailscale.com/admin/settings/keys
+#   2) Put TS_AUTHKEY=tskey-auth-... in .env
+#   3) docker compose -f docker-compose.tailscale.yml up -d
+#   4) On any device on your tailnet, open https://alpha.<tailnet>.ts.net
+#      → Add to Home Screen → 🔔 Alerts (push works: it's real HTTPS)
+#
+# This replaces the Caddy stack (Tailscale provides the cert). The app binds
+# only inside the Tailscale network namespace — it is not published to the LAN.
+
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: alpha-tailscale
+    hostname: alpha                      # becomes the MagicDNS name: alpha.<tailnet>.ts.net
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY in your .env}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_EXTRA_ARGS: --ssh
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./tailscale-serve.json:/config/serve.json:ro
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    restart: unless-stopped
+
+  alpha:
+    build: .
+    container_name: alpha-terminal
+    # Share the Tailscale network namespace so `tailscale serve` reaches the app
+    # on 127.0.0.1:8787 and the app is only addressable via the tailnet.
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    environment:
+      PORT: "8787"
+      ALPHA_BAR: "5m"
+      ALPHA_TOP: "60"
+      ALPHA_STOCKS: "on"
+      ALPHA_PUSH: "on"
+      ALPHA_AI: "${ALPHA_AI:-ollama}"
+      ALPHA_AI_URL: "http://ollama:11434/api/generate"
+      ALPHA_AI_MODEL: "${ALPHA_AI_MODEL:-llama3}"
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  tailscale-state:
+  ollama-models:

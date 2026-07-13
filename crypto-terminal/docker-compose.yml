@@ -1,0 +1,70 @@
+# Run Alpha Terminal on your NAS / home server, with your RTX 5090 powering the
+# local AI briefing via Ollama.
+#
+#   docker compose up -d
+#   open http://<nas-ip>:8787  on your phone or PC
+#
+# The 5090 doesn't fetch market data (the internet does) — it accelerates the
+# local LLM that writes the desk briefing. Set ALPHA_AI=off below to skip AI.
+
+services:
+  caddy:
+    image: caddy:2
+    container_name: alpha-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Set ALPHA_DOMAIN in a .env file. Defaults to localhost (self-signed cert).
+      ALPHA_DOMAIN: ${ALPHA_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - alpha
+
+  alpha:
+    build: .
+    # Or pull a prebuilt image instead of building:
+    # image: ghcr.io/<you>/alpha-terminal:latest
+    container_name: alpha-terminal
+    restart: unless-stopped
+    expose:
+      - "8787"          # internal: reached via the caddy proxy over HTTPS
+    ports:
+      - "8787:8787"     # optional: direct HTTP access on the LAN (remove if undesired)
+    environment:
+      PORT: "8787"
+      ALPHA_BAR: "5m"
+      ALPHA_TOP: "60"
+      ALPHA_STOCKS: "on"
+      # --- local AI (served by the ollama service below, on your 5090) ---
+      ALPHA_AI: "ollama"
+      ALPHA_AI_URL: "http://ollama:11434/api/generate"
+      ALPHA_AI_MODEL: "llama3"
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"      # remove to keep the model private to the compose network
+    volumes:
+      - ollama-models:/root/.ollama
+    # --- RTX 5090 passthrough (needs NVIDIA Container Toolkit on the host) ---
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  ollama-models:
+  caddy-data:
+  caddy-config:
