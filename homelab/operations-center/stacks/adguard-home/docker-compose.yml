@@ -1,0 +1,26 @@
+# AdGuard Home — network-wide ad/tracker blocking via DNS.  Setup at http://nas:8053
+#
+# Deploy on the NAS:
+#   cd adguard-home && docker compose up -d
+# Open http://nas:8053 for the FIRST-RUN wizard (it serves the setup UI there);
+# after setup the admin UI also lives on that port. Then point your router's DNS
+# (or per-device DNS) at the NAS's tailnet IP to filter your network.
+#
+# Tailnet-only for the admin UI. DNS (port 53) is offered to your LAN/tailnet —
+# never expose port 53 to the public internet (open resolvers get abused).
+
+services:
+  adguardhome:
+    image: adguard/adguardhome:latest
+    container_name: adguardhome
+    volumes:
+      - ./work:/opt/adguardhome/work
+      - ./conf:/opt/adguardhome/conf
+    ports:
+      - "53:53/tcp"        # DNS
+      - "53:53/udp"        # DNS
+      - "8053:3000/tcp"    # first-run setup + admin UI
+      # After the wizard, AdGuard's admin UI moves to the port you choose
+      # (commonly 80). Map it here if you change it, e.g.:
+      # - "8054:80/tcp"
+    restart: unless-stopped

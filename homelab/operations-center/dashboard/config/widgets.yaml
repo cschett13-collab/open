@@ -1,0 +1,24 @@
+# Homepage info widgets (top of the page) — https://gethomepage.dev/widgets/
+# These show live host stats and a greeting. The "resources" widget reads the
+# container host (the NAS) so you see CPU/RAM/disk at a glance.
+
+- greeting:
+    text_size: xl
+    text: Operations Center
+
+- datetime:
+    text_size: l
+    format:
+      timeStyle: short
+      dateStyle: short
+
+- resources:
+    cpu: true
+    memory: true
+    disk: /
+    cputemp: true
+    uptime: true
+
+- search:
+    provider: duckduckgo
+    target: _blank

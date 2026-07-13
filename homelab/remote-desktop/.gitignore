@@ -1,0 +1,11 @@
+# Never commit per-machine secrets / generated keys.
+.env
+*.env
+!*.env.example
+
+# RustDesk server keypair (generated into DATA_ROOT on first run).
+id_ed25519
+id_ed25519.pub
+
+# VNC password files, if created inside the repo tree.
+vncpasswd

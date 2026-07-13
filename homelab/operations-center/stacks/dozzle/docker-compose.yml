@@ -1,0 +1,17 @@
+# Dozzle — live Docker log viewer in the browser.  Reach at http://nas:8888
+#
+# Deploy on the NAS:
+#   cd dozzle && docker compose up -d
+# Open http://nas:8888 to tail logs of every container, no config needed.
+#
+# The Docker socket is mounted READ-ONLY (Dozzle only reads logs). Tailnet-only.
+
+services:
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "8888:8080"
+    restart: unless-stopped

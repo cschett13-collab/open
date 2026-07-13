@@ -1,0 +1,34 @@
+# Operations Center dashboard — run this ON THE NAS.
+#
+# Homepage (https://gethomepage.dev): a fast, YAML-configured homelab dashboard.
+# It links to every service in your homelab and shows live status widgets, all
+# reached over your tailnet at http://nas:3000.
+#
+# Deploy:
+#   1. Copy this folder to the NAS (e.g. /volume1/docker/operations-center).
+#   2. cp .env.example .env  and edit.
+#   3. docker compose up -d         (or import via the UGOS Container UI)
+#   4. Open http://nas:3000 from any tailnet device.
+#
+# The ./config files are pre-wired to this kit — edit them to add/remove tiles.
+# Do NOT publish port 3000 to the internet; the tailnet is the perimeter.
+
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: operations-center
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      # Recent Homepage versions require an allow-list of Host headers.
+      # Includes the MagicDNS name and the NAS tailnet IP you set in .env.
+      - HOMEPAGE_ALLOWED_HOSTS=${HOMEPAGE_ALLOWED_HOSTS}
+    volumes:
+      - ./config:/app/config
+      # Optional: lets the "docker" widget read container status locally.
+      # Safe read-only mount of the socket; remove if you'd rather not.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "3000:3000"          # reach via http://nas:3000 on the tailnet
+    restart: unless-stopped

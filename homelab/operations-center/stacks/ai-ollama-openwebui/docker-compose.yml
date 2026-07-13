@@ -1,0 +1,46 @@
+# Local AI — Ollama (LLM runtime) + Open WebUI (chat UI).  Reach at http://nas:3080
+#
+# Deploy on the NAS:
+#   cd ai-ollama-openwebui && docker compose up -d
+#   # pull a model (first time):
+#   docker exec -it ollama ollama pull llama3.2
+# Open http://nas:3080 and create the local admin account. Everything — models,
+# chats, embeddings — stays on your hardware. Tailnet-only; don't expose 3080.
+#
+# GPU: if the NAS has an NVIDIA GPU, uncomment the `deploy` block under ollama
+# and install the NVIDIA Container Toolkit. CPU-only works too, just slower.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    volumes:
+      - ./ollama:/root/.ollama
+    # Exposed only to the compose network by default; Open WebUI talks to it
+    # internally. Uncomment to also reach the API at http://nas:11434.
+    # ports:
+    #   - "11434:11434"
+    restart: unless-stopped
+    # --- Optional NVIDIA GPU ---
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      # Keep it offline/local-only (no outbound model/feature calls).
+      - HF_HUB_OFFLINE=1
+    volumes:
+      - ./open-webui:/app/backend/data
+    ports:
+      - "3080:8080"
+    restart: unless-stopped

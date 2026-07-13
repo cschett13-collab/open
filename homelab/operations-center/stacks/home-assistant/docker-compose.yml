@@ -1,0 +1,26 @@
+# Home Assistant — the smart-home hub.  Reach at http://nas:8123
+#
+# Deploy on the NAS:
+#   cd home-assistant && docker compose up -d
+# Open http://nas:8123 and run onboarding.
+#
+# Notes:
+#   - host network mode makes device discovery (mDNS/SSDP) work best. If your NAS
+#     dislikes host mode, comment it out and use the ports mapping instead.
+#   - To reach HA remotely, just use http://nas:8123 over Tailscale — no Nabu
+#     Casa / cloud needed. Tailnet-only; don't expose port 8123.
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    environment:
+      - TZ=${TZ:-America/New_York}
+    volumes:
+      - ./config:/config
+      - /etc/localtime:/etc/localtime:ro
+    network_mode: host
+    # If NOT using host mode, comment the line above and uncomment:
+    # ports:
+    #   - "8123:8123"
+    restart: unless-stopped
