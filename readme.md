@@ -2,11 +2,39 @@
 
 > Open stuff like URLs, files, executables. Cross-platform.
 
+[![CI](https://github.com/cschett13-collab/open/actions/workflows/main.yml/badge.svg)](https://github.com/cschett13-collab/open/actions/workflows/main.yml)
+[![npm version](https://img.shields.io/npm/v/open.svg)](https://www.npmjs.com/package/open)
+
 This is meant to be used in command-line tools and scripts, not in the browser.
 
 If you need this for Electron, use [`shell.openPath()`](https://www.electronjs.org/docs/api/shell#shellopenpathpath) instead.
 
 This package does not make any security guarantees. If you pass in untrusted input, it's up to you to properly sanitize it.
+
+## Who this project is for
+
+- **Package users**: want a reliable way to open URLs/files/apps from Node.js.
+- **Contributors**: want clear contribution and review expectations.
+- **Maintainers**: want consistent issue triage and release expectations.
+
+## Use in 30 seconds
+
+```sh
+npm install open
+```
+
+```js
+import open from 'open';
+
+await open('https://example.com');
+```
+
+## Download / Install
+
+- **Install from npm**: `npm install open`
+- **npm package page**: https://www.npmjs.com/package/open
+- **Latest source tarball/zip**: https://github.com/cschett13-collab/open/archive/refs/heads/main.zip
+- **Releases**: https://github.com/cschett13-collab/open/releases
 
 #### Why?
 
@@ -52,6 +80,14 @@ await openApp('xcode');
 // Open an app with arguments.
 await openApp(apps.chrome, {arguments: ['--incognito']});
 ```
+
+## Quick start checklist
+
+1. Install Node.js 20+.
+2. Install the package: `npm install open`.
+3. Import `open` in an ESM module.
+4. Call `open(target)` with a URL, file path, or executable.
+5. Use options like `wait`, `app`, and app arguments when needed.
 
 ## API
 
@@ -189,6 +225,35 @@ To use Linux GUI apps instead:
 ```javascript
 await open('https://example.com', {app: {name: 'xdg-open'}});
 ```
+
+## FAQ
+
+### Why doesn't `wait` work with a browser?
+
+Most browsers use a single running process. Opening a new URL often returns immediately. See the `newInstance` option for macOS if you need separate app instances.
+
+### Does this package support CommonJS?
+
+No. This package is native ESM. Use dynamic `import()` from CommonJS if needed.
+
+### Is untrusted input safe to pass to `open`?
+
+No guarantee is provided. Validate and sanitize input before passing it to this package.
+
+## Troubleshooting
+
+- Verify Node.js version is **20+** (`node --version`).
+- Ensure app names are platform-correct or use `apps` for known browsers.
+- On Linux/WSL, confirm `xdg-open` or PowerShell integration is available.
+- For project setup issues, run:
+  - `npm install`
+  - `npm test`
+
+## Security and support
+
+- Security policy: [`/.github/security.md`](./.github/security.md)
+- For security reports, use the private channel in the security policy.
+- For general support/questions, open a GitHub issue using the provided templates.
 
 ## Related
 
