@@ -3,6 +3,3 @@ contact_links:
   - name: Security vulnerability reporting
     url: https://tidelift.com/security
     about: Please report security issues through the private security channel.
-  - name: Usage/support questions
-    url: https://github.com/cschett13-collab/open/issues/new?template=docs_request.yml
-    about: Use issue templates for usage and documentation support.

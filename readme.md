@@ -251,7 +251,7 @@ No guarantee is provided. Validate and sanitize input before passing it to this 
 
 ## Security and support
 
-- Security policy: [`/.github/security.md`](./.github/security.md)
+- Security policy: [`./.github/security.md`](./.github/security.md)
 - For security reports, use the private channel in the security policy.
 - For general support/questions, open a GitHub issue using the provided templates.
 
