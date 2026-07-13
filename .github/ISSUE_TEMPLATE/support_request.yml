@@ -1,0 +1,31 @@
+name: Support Request
+description: Ask a usage or troubleshooting question.
+title: "[Support]: "
+labels: ["type:support", "status:needs-info"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you need help with?
+      description: Describe your goal and where you are stuck.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: What have you tried?
+      description: Include code snippets, commands, or links relevant to your issue.
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: "v20.x / v22.x / v24.x"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS / platform
+      placeholder: "macOS, Linux, Windows, WSL"
+    validations:
+      required: true
