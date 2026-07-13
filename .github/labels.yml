@@ -1,0 +1,23 @@
+- name: type:bug
+  color: "d73a4a"
+  description: Something is broken.
+
+- name: type:feature
+  color: "a2eeef"
+  description: New feature or enhancement request.
+
+- name: type:docs
+  color: "0075ca"
+  description: Documentation improvements.
+
+- name: type:support
+  color: "5319e7"
+  description: Usage/help request.
+
+- name: status:needs-info
+  color: "fbca04"
+  description: Waiting for more details from the reporter.
+
+- name: status:ready
+  color: "0e8a16"
+  description: Ready for implementation or review.
