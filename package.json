@@ -22,6 +22,12 @@
 	"scripts": {
 		"test": "xo && tsd"
 	},
+	"xo": {
+		"ignores": [
+			"crypto-terminal/**",
+			"golke-construction-preview/**"
+		]
+	},
 	"files": [
 		"index.js",
 		"index.d.ts",

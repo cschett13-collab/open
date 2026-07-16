@@ -10,6 +10,9 @@
 #
 # This replaces the Caddy stack (Tailscale provides the cert). The app binds
 # only inside the Tailscale network namespace — it is not published to the LAN.
+#
+# alpha + ollama share the Tailscale network namespace so AI briefings reach
+# Ollama at 127.0.0.1 (hostname `ollama` is not resolvable under network_mode).
 
 services:
   tailscale:
@@ -39,6 +42,7 @@ services:
     network_mode: service:tailscale
     depends_on:
       - tailscale
+      - ollama
     environment:
       PORT: "8787"
       ALPHA_BAR: "5m"
@@ -46,13 +50,20 @@ services:
       ALPHA_STOCKS: "on"
       ALPHA_PUSH: "on"
       ALPHA_AI: "${ALPHA_AI:-ollama}"
-      ALPHA_AI_URL: "http://ollama:11434/api/generate"
+      # Same netns as ollama → localhost, not the compose DNS name.
+      ALPHA_AI_URL: "${ALPHA_AI_URL:-http://127.0.0.1:11434/api/generate}"
       ALPHA_AI_MODEL: "${ALPHA_AI_MODEL:-llama3}"
+    volumes:
+      - alpha-data:/app/.data
     restart: unless-stopped
 
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
+    # Share Tailscale netns with alpha so ALPHA_AI_URL=http://127.0.0.1:11434 works.
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
     restart: unless-stopped
     volumes:
       - ollama-models:/root/.ollama
@@ -66,4 +77,5 @@ services:
 
 volumes:
   tailscale-state:
+  alpha-data:
   ollama-models:

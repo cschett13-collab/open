@@ -44,6 +44,8 @@ services:
       ALPHA_AI: "ollama"
       ALPHA_AI_URL: "http://ollama:11434/api/generate"
       ALPHA_AI_MODEL: "llama3"
+    volumes:
+      - alpha-data:/app/.data
     depends_on:
       - ollama
 
@@ -65,6 +67,7 @@ services:
               capabilities: [gpu]
 
 volumes:
+  alpha-data:
   ollama-models:
   caddy-data:
   caddy-config:

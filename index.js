@@ -19,7 +19,7 @@ import isInSsh from 'is-in-ssh';
 const fallbackAttemptSymbol = Symbol('fallbackAttempt');
 
 // Path to included `xdg-open`.
-const __dirname = import.meta.url ? path.dirname(fileURLToPath(import.meta.url)) : '';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localXdgOpenPath = path.join(__dirname, 'xdg-open');
 
 const {platform, arch} = process;
@@ -80,16 +80,25 @@ const baseOpen = async options => {
 
 	if (app === 'browser' || app === 'browserPrivate') {
 		// IDs from default-browser for macOS and windows are the same.
-		// IDs are lowercased to increase chances of a match.
+		// Normalize to lowercase; Linux often appends `.desktop`.
 		const ids = {
 			'com.google.chrome': 'chrome',
+			'com.google.chrome.desktop': 'chrome',
 			'google-chrome.desktop': 'chrome',
+			'google-chrome': 'chrome',
+			'chromium.desktop': 'chrome',
+			'chromium-browser.desktop': 'chrome',
 			'com.brave.browser': 'brave',
+			'com.brave.browser.desktop': 'brave',
+			'brave-browser.desktop': 'brave',
 			'org.mozilla.firefox': 'firefox',
+			'org.mozilla.firefox.desktop': 'firefox',
 			'firefox.desktop': 'firefox',
+			firefox: 'firefox',
 			'com.microsoft.msedge': 'edge',
 			'com.microsoft.edge': 'edge',
 			'com.microsoft.edgemac': 'edge',
+			'com.microsoft.edge.desktop': 'edge',
 			'microsoft-edge.desktop': 'edge',
 			'com.apple.safari': 'safari',
 		};
@@ -112,8 +121,9 @@ const baseOpen = async options => {
 			browser = await defaultBrowser();
 		}
 
-		if (browser.id in ids) {
-			const browserName = ids[browser.id.toLowerCase()];
+		const browserId = typeof browser.id === 'string' ? browser.id.toLowerCase() : '';
+		if (browserId && browserId in ids) {
+			const browserName = ids[browserId];
 
 			if (app === 'browserPrivate') {
 				// Safari doesn't support private mode via command line
@@ -328,7 +338,7 @@ export const openApp = (name, options) => {
 
 	const {arguments: appArguments = []} = options ?? {};
 	if (appArguments !== undefined && appArguments !== null && !Array.isArray(appArguments)) {
-		throw new TypeError('Expected `appArguments` as Array type');
+		throw new TypeError('Expected `arguments` as Array type');
 	}
 
 	return baseOpen({

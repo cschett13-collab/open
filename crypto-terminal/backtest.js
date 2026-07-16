@@ -4,8 +4,9 @@
 //   node backtest.js                 # defaults: 15m bars, 2h horizon, 18 symbols
 //   ALPHA_BT_BAR=1H ALPHA_BT_HORIZON=6 ALPHA_BT_BARS=800 node backtest.js
 //
-// NOT FINANCIAL ADVICE. In-sample, fees ignored, small sample — a sanity check
+// NOT FINANCIAL ADVICE. In-sample, small sample — a sanity check
 // on whether the engine has any edge, not a profit guarantee.
+// Round-trip costs default to ALPHA_BT_FEE_BPS (10 bps) on reported nets.
 
 import process from 'node:process';
 import {backtest} from './lib/backtest.js';
@@ -101,7 +102,7 @@ async function main() {
 
 	console.log('\n' + color(' Read it honestly: if higher thresholds/deciles show higher avg returns &', c.dim));
 	console.log(color(' win rates than baseline, the engine has edge on this window. If not, it', c.dim));
-	console.log(color(' does not — markets shift. In-sample, fees ignored. NOT financial advice.', c.dim) + '\n');
+	console.log(color(' does not — markets shift. Costs applied via ALPHA_BT_FEE_BPS. NOT financial advice.', c.dim) + '\n');
 }
 
 main().catch(error => {

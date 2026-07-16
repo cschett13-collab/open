@@ -23,8 +23,10 @@ export const WATCHLIST = [
 
 const agent = new https.Agent({keepAlive: true, maxSockets: 12});
 
+// 5 trading days of 5m bars keeps analyze()'s ≥40-bar floor happy even early
+// in the session (range=1d often returns <40 bars before midday).
 function getChart(symbol, {timeout = 9000} = {}) {
-	const path = `/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=5m`;
+	const path = `/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=5m`;
 	return new Promise((resolve, reject) => {
 		const req = https.request(
 			{
@@ -41,6 +43,11 @@ function getChart(symbol, {timeout = 9000} = {}) {
 					body += c;
 				});
 				res.on('end', () => {
+					if (res.statusCode < 200 || res.statusCode >= 300) {
+						reject(new Error(`HTTP ${res.statusCode} for ${symbol}`));
+						return;
+					}
+
 					try {
 						resolve(JSON.parse(body));
 					} catch (error) {
@@ -53,6 +60,22 @@ function getChart(symbol, {timeout = 9000} = {}) {
 		req.setTimeout(timeout, () => req.destroy(new Error('timeout')));
 		req.end();
 	});
+}
+
+// Yahoo chart meta.marketState was removed; derive session from trading periods.
+function deriveMarketState(meta) {
+	if (!meta) return 'UNKNOWN';
+	if (typeof meta.marketState === 'string' && meta.marketState) return meta.marketState;
+
+	const now = Math.floor(Date.now() / 1000);
+	const periods = meta.currentTradingPeriod;
+	if (!periods) return 'UNKNOWN';
+
+	const inRange = p => p && now >= p.start && now < p.end;
+	if (inRange(periods.pre)) return 'PRE';
+	if (inRange(periods.regular)) return 'REGULAR';
+	if (inRange(periods.post)) return 'POST';
+	return 'CLOSED';
 }
 
 // Build OHLCV candles + a synthetic ticker, then reuse the crypto analyzer.
@@ -86,7 +109,7 @@ async function analyzeStock(symbol) {
 	if (!s) return undefined;
 	s.last = last; // use the official last price, not the last 5m close
 	s.changePct24h = changePct;
-	s.marketState = m.marketState; // PRE / REGULAR / POST / CLOSED
+	s.marketState = deriveMarketState(m);
 	return s;
 }
 

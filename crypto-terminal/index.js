@@ -22,7 +22,7 @@ import {c, color} from './lib/render.js';
 
 const FAST_MS = 1500; // live price / tape refresh
 const DEEP_REFRESH_MS = 20_000; // full re-scan cadence
-const TOP_LIQUID = 60; // how many liquid USDT markets to deep-scan
+const TOP_LIQUID = Number(process.env.ALPHA_TOP || 60); // liquid USDT markets to deep-scan
 const BAR = process.env.ALPHA_BAR || '5m'; // candle timeframe for signals
 
 const state = {
@@ -161,7 +161,8 @@ function header(width) {
 
 	const left = `${title} ${sub}`;
 	const right = `${color(spin, c.cyan)} ${color(now, c.white)}`;
-	const line1 = R.pad(left, width - R.pad(right, 0).length - 12) + right;
+	const rightVis = right.replace(/\u001B\[[0-9;]*m/g, '').length;
+	const line1 = R.pad(left, Math.max(0, width - rightVis - 1)) + right;
 	const line2 = `  ${btcStr}   ${ethStr}   ${regStr}   ${color(`adv ${reg.advancers}/${reg.total}`, c.dim)}`;
 	return `${line1}\n${line2}`;
 }
@@ -262,7 +263,7 @@ function tape(width) {
 	});
 	let strip = cells.join(color('  ·  ', c.gray));
 	// Build a plain version for offset math, then rotate.
-	const plain = strip.replace(/\[[0-9;]*m/g, '');
+	const plain = strip.replace(/\u001B\[[0-9;]*m/g, '');
 	const doubled = strip + color('  ·  ', c.gray) + strip;
 	// Approximate scroll by character offset on the colored doubled string.
 	const off = state.tapeOffset % (plain.length || 1);
@@ -367,7 +368,7 @@ async function main() {
 		process.stdin.resume();
 		process.stdin.setEncoding('utf8');
 		process.stdin.on('data', key => {
-			if (key === 'q' || key === '' || key === '') shutdown(0); // q / Ctrl-C / Esc
+			if (key === 'q' || key === '\u0003' || key === '\u001B') shutdown(0); // q / Ctrl-C / Esc
 			if (key === 'r') deepScan();
 		});
 	}

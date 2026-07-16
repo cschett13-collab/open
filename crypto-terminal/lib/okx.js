@@ -111,7 +111,7 @@ export async function getCandlesPaged(instId, bar = '15m', total = 600) {
 	}
 
 	out.sort((a, b) => a.t - b.t); // chronological ascending
-	return out;
+	return out.length > total ? out.slice(-total) : out;
 }
 
 // Run promise-returning tasks with bounded concurrency so we never hammer the API.

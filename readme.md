@@ -91,7 +91,7 @@ await openApp(apps.chrome, {arguments: ['--incognito']});
 
 ## API
 
-It uses the command `open` on macOS, `start` on Windows and `xdg-open` on other platforms.
+It uses the command `open` on macOS, PowerShell (`Start-Process`) on Windows, and `xdg-open` on other platforms.
 
 ### open(target, options?)
 
@@ -211,10 +211,11 @@ await open('https://google.com', {
 - [`firefox`](https://www.mozilla.org/firefox) - Web browser
 - [`edge`](https://www.microsoft.com/edge) - Web browser
 - [`brave`](https://brave.com/) - Web browser
+- `safari` - Web browser (macOS only)
 - `browser` - Default web browser
 - `browserPrivate` - Default web browser in incognito mode
 
-`browser` and `browserPrivate` only supports `chrome`, `firefox`, `edge`, and `brave`.
+`browser` and `browserPrivate` support `chrome`, `firefox`, `edge`, `brave`, and `safari` (Safari cannot open in private mode via CLI).
 
 ## WSL (Windows Subsystem for Linux)
 

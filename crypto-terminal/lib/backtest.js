@@ -3,8 +3,9 @@
 // return over a fixed horizon. This answers the only question that matters:
 // do high scores actually precede higher returns, beyond random chance?
 //
-// Honesty notes (see README): this is in-sample on recent history, ignores
-// trading fees/slippage, and a few hundred bars is a small sample. Treat it as a
+// Honesty notes (see README): this is in-sample on recent history and a few
+// hundred bars is a small sample. The CLI reports net-of-cost averages using
+// ALPHA_BT_FEE_BPS; per-bar samples themselves stay gross. Treat results as a
 // sanity check on the engine's edge, not a profit promise.
 
 import {getAllSpotTickers, getCandlesPaged, pool} from './okx.js';
