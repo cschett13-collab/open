@@ -14,10 +14,13 @@ import http from 'node:http';
 import {readFileSync, writeFileSync, mkdirSync} from 'node:fs';
 import {scan} from './lib/engine.js';
 import {verdict} from './lib/signals.js';
-import {briefing, aiConfig} from './lib/ai.js';
+import {
+	briefing, aiConfig, aiStatus, aiHealth, enrichAlert, digest,
+	snapshotFingerprint, snapshotChanged,
+} from './lib/ai.js';
 import {scanStocks} from './lib/stocks.js';
 import {generateVapidKeys, sendNotification} from './lib/webpush.js';
-import {dispatch as dispatchWebhooks, webhooksEnabled} from './lib/webhooks.js';
+import {dispatch as dispatchWebhooks, dispatchText, webhooksEnabled} from './lib/webhooks.js';
 import {getCandles} from './lib/okx.js';
 import {analyze} from './lib/signals.js';
 
@@ -27,11 +30,15 @@ const TOP = Number(process.env.ALPHA_TOP || 60);
 const REFRESH_MS = Number(process.env.ALPHA_REFRESH_MS || 15_000);
 const STOCKS_MS = Number(process.env.ALPHA_STOCKS_MS || 30_000);
 const STOCKS_ON = (process.env.ALPHA_STOCKS || 'on').toLowerCase() !== 'off';
+const DIGEST_MS = Number(process.env.ALPHA_AI_DIGEST_MS || 0); // 0 = off
 
 let snapshot = null;
 let stocks = null;
 let briefingText = null;
 let lastError = null;
+let lastBriefingFp = null;
+let digestSince = Date.now();
+const digestAlertIds = new Set();
 
 // --- Web Push: persist VAPID keys + phone subscriptions ---------------------
 const DATA_DIR = new URL('.data/', import.meta.url);
@@ -70,9 +77,13 @@ function saveSubs() {
 
 function pushToAll(alert) {
 	if (!PUSH_ON || !vapid || subscriptions.length === 0) return;
+	let body =
+		`${alert.kind === 'stock' ? 'Stock' : 'Crypto'} · ${alert.score}/100 · $${alert.price} ` +
+		`(${alert.changePct >= 0 ? '+' : ''}${alert.changePct.toFixed(1)}%) · ${alert.why}`;
+	if (alert.ai) body += ` · ${alert.ai}`;
 	const payload = JSON.stringify({
 		title: `🚀 ${alert.sym} — ${alert.tag}`,
-		body: `${alert.kind === 'stock' ? 'Stock' : 'Crypto'} · ${alert.score}/100 · $${alert.price} (${alert.changePct >= 0 ? '+' : ''}${alert.changePct.toFixed(1)}%) · ${alert.why}`,
+		body: body.slice(0, 220),
 	});
 	for (const sub of [...subscriptions]) {
 		sendNotification(sub, payload, vapid)
@@ -85,6 +96,24 @@ function pushToAll(alert) {
 			})
 			.catch(() => {});
 	}
+}
+
+function pushText(title, body) {
+	if (!PUSH_ON || !vapid || subscriptions.length === 0) return;
+	const payload = JSON.stringify({title, body: String(body).slice(0, 220)});
+	for (const sub of [...subscriptions]) {
+		sendNotification(sub, payload, vapid).catch(() => {});
+	}
+}
+
+async function deliverAlert(alert) {
+	if (aiConfig().enabled) {
+		const enriched = await enrichAlert(alert, snapshot);
+		if (enriched.ok && enriched.text) alert.ai = enriched.text;
+	}
+
+	pushToAll(alert);
+	dispatchWebhooks(alert);
 }
 
 // --- Real-time alert engine -------------------------------------------------
@@ -109,7 +138,7 @@ function consider(kind, rows) {
 		const key = `${kind}:${s.base}:${hot}`;
 		if (now - (lastFired.get(key) || 0) < ALERT_COOLDOWN_MS) continue;
 		lastFired.set(key, now);
-		alerts.push({
+		const alert = {
 			id: ++alertSeq,
 			kind,
 			sym: s.base,
@@ -119,11 +148,39 @@ function consider(kind, rows) {
 			changePct: s.changePct24h,
 			why: verdict(s)[1],
 			ts: now,
-		});
+		};
+		alerts.push(alert);
 		if (alerts.length > 50) alerts.shift();
-		pushToAll(alerts[alerts.length - 1]);
-		dispatchWebhooks(alerts[alerts.length - 1]);
+		digestAlertIds.add(alert.id);
+		// Enrich + fan-out async so the scan loop never waits on vLLM.
+		deliverAlert(alert).catch(() => {});
 	}
+}
+
+function maybeBriefing(snap) {
+	if (!aiConfig().enabled) return;
+	if (!snapshotChanged(lastBriefingFp, snap)) return;
+	const fp = snapshotFingerprint(snap);
+	briefing(snap).then(result => {
+		if (result.ok && result.text) {
+			lastBriefingFp = fp;
+			briefingText = {text: result.text, ts: Date.now(), cached: Boolean(result.cached)};
+		}
+	}).catch(() => {});
+}
+
+async function runDigest() {
+	if (!DIGEST_MS || !aiConfig().enabled) return;
+	const recent = alerts.filter(a => a.ts >= digestSince && digestAlertIds.has(a.id));
+	const regime = snapshot?.regime;
+	// Only spend GPU when there is something to say (or regime exists after warmup).
+	if (!regime && recent.length === 0) return;
+	const result = await digest({regime, alerts: recent, bar: BAR});
+	digestSince = Date.now();
+	digestAlertIds.clear();
+	if (!result.ok || !result.text) return;
+	pushText('▲ Alpha — while you were away', result.text);
+	dispatchText(result.text, {title: '▲ Alpha — while you were away'});
 }
 
 async function refresh() {
@@ -131,11 +188,7 @@ async function refresh() {
 		snapshot = await scan({bar: BAR, top: TOP});
 		lastError = null;
 		consider('crypto', [...snapshot.booms, ...snapshot.buys]);
-		if (aiConfig().enabled) {
-			briefing(snapshot).then(text => {
-				if (text) briefingText = {text, ts: Date.now()};
-			});
-		}
+		maybeBriefing(snapshot);
 	} catch (error) {
 		lastError = error.message;
 	}
@@ -174,7 +227,12 @@ function payload() {
 		booms: snapshot.booms.slice(0, 12).map(slim),
 		buys: snapshot.buys.slice(0, 12).map(slim),
 		markets: snapshot.tickers.length,
-		ai: aiConfig().enabled ? (briefingText || {text: 'generating…', ts: 0}) : null,
+		ai: aiConfig().enabled
+			? {
+				...(briefingText || {text: 'generating…', ts: 0}),
+				status: aiStatus(),
+			}
+			: {status: aiStatus()},
 		stocks: stocks ? {
 			marketState: stocks.marketState,
 			ts: stocks.ts,
@@ -337,19 +395,25 @@ const server = http.createServer((req, res) => {
 if (PUSH_ON) loadPush();
 
 server.listen(PORT, () => {
+	const cfg = aiConfig();
 	process.stdout.write(
 		`\n ▲ ALPHA TERMINAL web dashboard\n` +
 		`   local:   http://localhost:${PORT}\n` +
 		`   network: http://<your-ip>:${PORT}   (open this on your phone)\n` +
-		`   AI briefing: ${aiConfig().enabled ? aiConfig().mode + ' (' + aiConfig().model + ')' : 'off'}\n` +
+		`   AI desk: ${cfg.enabled ? 'vllm (' + cfg.model + ') @ ' + cfg.url : 'off'}\n` +
+		`   AI digest: ${DIGEST_MS ? (DIGEST_MS / 60_000) + 'm' : 'off'}\n` +
 		`   phone push: ${PUSH_ON ? 'on (' + subscriptions.length + ' subscribed)' : 'off'}\n` +
 		`   webhooks: ${webhooksEnabled() ? 'on' : 'off'}\n` +
 		`   refreshing every ${REFRESH_MS / 1000}s · ${BAR} bars\n\n`,
 	);
+	if (cfg.enabled) aiHealth().catch(() => {});
 	refresh();
 	setInterval(refresh, REFRESH_MS);
 	refreshStocks();
 	setInterval(refreshStocks, STOCKS_MS);
+	if (DIGEST_MS > 0) setInterval(() => {
+		runDigest().catch(() => {});
+	}, DIGEST_MS);
 });
 
 // ---------------------------------------------------------------------------
@@ -424,7 +488,7 @@ tr.tap{cursor:pointer}tr.tap:hover td{background:#16202e}
 <main>
   <div class="panel alertsPanel" id="alertsWrap" style="display:none"><h2 style="color:var(--yel)">🔔 LIVE ALERTS</h2><div id="alerts"></div></div>
   <div class="panel focus" id="focusWrap" style="display:none"><h2 id="focusTitle"></h2><div id="focus"></div></div>
-  <div class="panel" id="aiWrap" style="display:none"><h2>🧠 AI Desk Briefing <span class="dim" id="aiMeta"></span></h2><div class="brief" id="brief"></div></div>
+  <div class="panel" id="aiWrap" style="display:none"><h2>🧠 AI Desk Briefing <span class="dim" id="aiMeta"></span> <span class="pill" id="aiState" style="display:none"></span></h2><div class="brief" id="brief"></div></div>
   <div class="panel"><h2 style="color:var(--mag)">🚀 ABOUT TO EXPLODE <span class="dim">volume + squeeze pre-breakout</span></h2><div id="booms"></div></div>
   <div class="panel"><h2 style="color:var(--lime)">📈 BUY NOW <span class="dim">confirmed momentum</span></h2><div id="buys"></div></div>
   <div class="panel" id="stocksWrap" style="display:none"><h2 style="color:var(--cyan)">📊 STOCKS MOVING <span class="dim" id="stkState"></span></h2><div id="stocks"></div></div>
@@ -513,7 +577,21 @@ async function tick(){
       '<span class="pill dim">'+d.bar+' bars · '+d.markets+' USDT mkts</span>';
     const fw=document.getElementById('focusWrap');
     if(d.focus){fw.style.display='';document.getElementById('focusTitle').innerHTML='★ TOP CONVICTION RIGHT NOW';document.getElementById('focus').innerHTML=focusCard(d.focus);}else fw.style.display='none';
-    if(d.ai){document.getElementById('aiWrap').style.display='';document.getElementById('brief').textContent=d.ai.text;document.getElementById('aiMeta').textContent=d.ai.ts?new Date(d.ai.ts).toLocaleTimeString():'';}
+    const aiWrap=document.getElementById('aiWrap');
+    const aiSt=d.ai&&d.ai.status;
+    if(d.ai&&(d.ai.text!=null||(aiSt&&aiSt.enabled))){
+      aiWrap.style.display='';
+      document.getElementById('brief').textContent=d.ai.text||(aiSt&&aiSt.state==='degraded'?'(vLLM unreachable — signals still live)':'generating…');
+      document.getElementById('aiMeta').textContent=d.ai.ts?new Date(d.ai.ts).toLocaleTimeString():'';
+      const pill=document.getElementById('aiState');
+      if(aiSt){
+        pill.style.display='inline';
+        const st=aiSt.state||'off';
+        pill.textContent='AI: '+st+(aiSt.lastLatencyMs!=null?' · '+aiSt.lastLatencyMs+'ms':'');
+        pill.style.borderColor=st==='ok'?'var(--green)':st==='degraded'?'var(--orange)':'var(--line)';
+        pill.style.color=st==='ok'?'var(--green)':st==='degraded'?'var(--orange)':'var(--dim)';
+      }else pill.style.display='none';
+    }else aiWrap.style.display='none';
     document.getElementById('booms').innerHTML=rows(d.booms,'explosionScore',true);
     document.getElementById('buys').innerHTML=rows(d.buys,'buyScore',true);
     const sw=document.getElementById('stocksWrap');
