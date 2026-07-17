@@ -347,6 +347,7 @@ crypto-terminal/
 ├── backtest.js         walk-forward backtest of the signal engine
 ├── Dockerfile          tiny zero-dep image
 ├── docker-compose.yml  NAS deploy: Caddy(HTTPS) + app + vLLM (RTX 5090 GPU)
+├── docker-compose.tailscale.yml  private HTTPS via Tailscale Serve
 ├── Caddyfile           auto-HTTPS reverse proxy
 ├── .env.example        deployment config
 ├── manifest.webmanifest / sw.js / icons/   installable PWA assets
@@ -355,7 +356,7 @@ crypto-terminal/
     ├── stocks.js       live US-equity movers via Yahoo (same signal engine)
     ├── indicators.js   RSI, EMA, ATR, Bollinger width, slope, MACD, z-score…
     ├── signals.js      scoring engine (buy / explosion / regime / verdict)
-    ├── engine.js       shared scan() used by terminal, web, and snapshot
+    ├── engine.js       shared scan() used by web + snapshot (TUI has its own loop)
     ├── backtest.js     walk-forward signal evaluation
     ├── ai.js           local AI desk agents (vLLM OpenAI-compatible)
     ├── webpush.js      zero-dep Web Push (VAPID + aes128gcm)

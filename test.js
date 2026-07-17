@@ -25,8 +25,8 @@ test('open file in default app', async t => {
 	await t.notThrowsAsync(open('index.js'));
 });
 
-test('encode URL if url: true', async t => {
-	await t.notThrowsAsync(open('https://sindresorhus.com', {url: true}));
+test('open URL (url option is ignored / removed)', async t => {
+	await t.notThrowsAsync(open('https://sindresorhus.com'));
 });
 
 test('open URL in default app', async t => {
@@ -77,8 +77,8 @@ test('open URL with query strings and URL reserved characters', async t => {
 	await t.notThrowsAsync(open('https://httpbin.org/get?amp=%26&colon=%3A&comma=%2C&commat=%40&dollar=%24&equals=%3D&plus=%2B&quest=%3F&semi=%3B&sol=%2F'));
 });
 
-test('open URL with query strings and URL reserved characters with `url` option', async t => {
-	await t.notThrowsAsync(open('https://httpbin.org/get?amp=%26&colon=%3A&comma=%2C&commat=%40&dollar=%24&equals=%3D&plus=%2B&quest=%3F&semi=%3B&sol=%2F', {url: true}));
+test('open URL with query strings and URL reserved characters (again)', async t => {
+	await t.notThrowsAsync(open('https://httpbin.org/get?amp=%26&colon=%3A&comma=%2C&commat=%40&dollar=%24&equals=%3D&plus=%2B&quest=%3F&semi=%3B&sol=%2F'));
 });
 
 test('open URL with single backtick', async t => {

@@ -5,6 +5,7 @@
 // Standards: RFC 8292 (VAPID), RFC 8291 (message encryption), RFC 8188 (aes128gcm).
 
 import crypto from 'node:crypto';
+import https from 'node:https';
 
 const b64url = buf =>
 	Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -88,7 +89,6 @@ export function decryptForTest(body, uaEcdh, authB64) {
 }
 
 // --- Send one push ----------------------------------------------------------
-import https from 'node:https';
 export function sendNotification(subscription, payloadString, vapid) {
 	return new Promise((resolve, reject) => {
 		let body = Buffer.alloc(0);

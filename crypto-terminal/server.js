@@ -388,6 +388,12 @@ const server = http.createServer((req, res) => {
 		return;
 	}
 
+	if (path.startsWith('/api/') || path !== '/') {
+		res.writeHead(404, {'content-type': 'application/json'});
+		res.end(JSON.stringify({error: 'not found'}));
+		return;
+	}
+
 	res.writeHead(200, {'content-type': 'text/html; charset=utf-8'});
 	res.end(PAGE);
 });
@@ -529,11 +535,21 @@ async function subscribePush(){
     await fetch('/api/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(sub)});
   }catch(e){/* push optional; in-app notifications still work */}
 }
+async function unsubscribePush(){
+  try{
+    const reg=await navigator.serviceWorker?.ready;if(!reg||!reg.pushManager)return;
+    const sub=await reg.pushManager.getSubscription();
+    if(sub){
+      await fetch('/api/unsubscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(sub)});
+      await sub.unsubscribe();
+    }
+  }catch(e){/* best-effort */}
+}
 bell.onclick=async()=>{
   if(!alertsOn){
     if('Notification'in window && Notification.permission!=='granted'){try{await Notification.requestPermission();}catch(e){}}
     alertsOn=true;localStorage.setItem('alertsOn','1');beep();subscribePush();
-  }else{alertsOn=false;localStorage.setItem('alertsOn','0');}
+  }else{alertsOn=false;localStorage.setItem('alertsOn','0');unsubscribePush();}
   paintBell();
 };
 if(alertsOn&&'Notification'in window&&Notification.permission==='granted')subscribePush();

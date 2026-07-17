@@ -49,6 +49,8 @@ services:
       ALPHA_AI: "${ALPHA_AI:-vllm}"
       ALPHA_AI_URL: "http://127.0.0.1:8000/v1/chat/completions"
       ALPHA_AI_MODEL: "${ALPHA_AI_MODEL:-meta-llama/Meta-Llama-3.1-8B-Instruct}"
+    volumes:
+      - alpha-data:/app/.data
     restart: unless-stopped
 
   vllm:
@@ -80,4 +82,5 @@ services:
 
 volumes:
   tailscale-state:
+  alpha-data:
   vllm-models:

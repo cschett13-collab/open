@@ -60,7 +60,10 @@ export function analyze(instId, ticker, candles) {
 
 	// ---- EXPLOSION score: coiled spring about to release ----
 	// Squeeze: current band width well below its recent self.
-	const squeeze = bbw !== undefined && bbwHist !== undefined ? ramp(bbwHist / bbw, 1.2, 2.6) : 0;
+	// Guard bbw===0 (flat tape) — otherwise bbwHist/bbw is Infinity/NaN.
+	const squeeze = bbw !== undefined && bbwHist !== undefined && bbw > 0
+		? ramp(bbwHist / bbw, 1.2, 2.6)
+		: 0;
 	let boom = 0;
 	boom += squeeze * 26; // volatility compression precedes expansion
 	boom += ramp(volZ ?? 0, 1.5, 4.5) * 30; // volume ignition is the trigger

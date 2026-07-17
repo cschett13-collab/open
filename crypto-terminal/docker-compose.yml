@@ -46,6 +46,8 @@ services:
       ALPHA_AI_URL: "http://vllm:8000/v1/chat/completions"
       ALPHA_AI_MODEL: "${ALPHA_AI_MODEL:-meta-llama/Meta-Llama-3.1-8B-Instruct}"
       # ALPHA_AI_DIGEST_MS: "3600000"   # optional hourly away digest
+    volumes:
+      - alpha-data:/app/.data
     depends_on:
       vllm:
         condition: service_healthy
@@ -90,6 +92,7 @@ services:
               capabilities: [gpu]
 
 volumes:
+  alpha-data:
   vllm-models:
   caddy-data:
   caddy-config:
