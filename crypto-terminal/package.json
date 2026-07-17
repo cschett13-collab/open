@@ -11,7 +11,8 @@
 		"start": "node index.js",
 		"scan": "node scan.js",
 		"web": "node server.js",
-		"backtest": "node backtest.js"
+		"backtest": "node backtest.js",
+		"test": "node --test lib/ai.test.js"
 	},
 	"engines": {
 		"node": ">=18"

@@ -49,15 +49,35 @@ export function webhooksEnabled() {
 function format(alert) {
 	const arrow = alert.changePct >= 0 ? '▲' : '▼';
 	const kind = alert.kind === 'stock' ? 'Stock' : 'Crypto';
-	return `🚀 ${alert.sym} — ${alert.tag} (${alert.score}/100)\n` +
-		`${kind} · $${alert.price} ${arrow}${Math.abs(alert.changePct).toFixed(1)}% · ${alert.why}\n` +
-		`(not financial advice)`;
+	let msg =
+		`🚀 ${alert.sym} — ${alert.tag} (${alert.score}/100)\n` +
+		`${kind} · $${alert.price} ${arrow}${Math.abs(alert.changePct).toFixed(1)}% · ${alert.why}`;
+	if (alert.ai) msg += `\n🧠 ${alert.ai}`;
+	msg += `\n(not financial advice)`;
+	return msg;
 }
 
-// Fire-and-forget; never throws.
+// Fire-and-forget; never throws. Optional plain-text digest via dispatchText().
 export function dispatch(alert) {
 	const c = webhookConfig();
 	const msg = format(alert);
+	if (c.discord) {
+		post(c.discord, {content: msg}).catch(() => {});
+	}
+
+	if (c.telegramToken && c.telegramChat) {
+		post(`https://api.telegram.org/bot${c.telegramToken}/sendMessage`, {
+			chat_id: c.telegramChat,
+			text: msg,
+			disable_web_page_preview: true,
+		}).catch(() => {});
+	}
+}
+
+/** Post an arbitrary message (e.g. away digest) to configured webhooks. */
+export function dispatchText(text, {title = '▲ Alpha digest'} = {}) {
+	const c = webhookConfig();
+	const msg = `${title}\n${text}\n(not financial advice)`;
 	if (c.discord) {
 		post(c.discord, {content: msg}).catch(() => {});
 	}

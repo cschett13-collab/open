@@ -72,10 +72,14 @@ Optional config via env vars:
 | `ALPHA_TOP`        | `60`    | How many top-liquidity markets to scan           |
 | `PORT`             | `8787`  | Web dashboard port (`server.js`)                 |
 | `ALPHA_REFRESH_MS` | `15000` | Server-side rescan cadence for the web dashboard |
-| `ALPHA_AI`         | `off`   | Local-AI briefing: `off` / `ollama` / `openai`   |
-| `ALPHA_AI_MODEL`   | —       | Model name (e.g. `llama3`)                        |
-| `ALPHA_AI_URL`     | —       | Override the AI endpoint URL                      |
-| `ALPHA_AI_KEY`     | —       | Bearer key, if your endpoint needs one           |
+| `ALPHA_AI`         | `off`   | Local AI desk: `off` / `vllm` (OpenAI-compatible) |
+| `ALPHA_AI_MODEL`   | —       | Model id served by vLLM                           |
+| `ALPHA_AI_URL`     | —       | Chat completions URL (default `:8000/v1/...`)     |
+| `ALPHA_AI_KEY`     | —       | Bearer key, if your endpoint needs one            |
+| `ALPHA_AI_TIMEOUT_MS` | `60000` | Per-request timeout                            |
+| `ALPHA_AI_RETRIES` | `2`     | Retries on transient AI failures                  |
+| `ALPHA_AI_MAX_TOKENS` | `280` | Max tokens for briefing replies                 |
+| `ALPHA_AI_DIGEST_MS` | `0`   | Away-digest interval ms (`0` = off)               |
 
 ```bash
 ALPHA_BAR=15m ALPHA_TOP=80 node index.js
@@ -152,24 +156,35 @@ the trade levels.
 ALPHA_ALERT_IGNITION=60 ALPHA_ALERT_BUY=64 node server.js
 ```
 
-## 🧠 Connect your own local AI (optional)
+## 🧠 Local AI desk agents via vLLM (optional)
 
-The app can ask a model **running on your machine** to write a short "desk analyst"
-briefing over the live signals. It's **off by default** and only narrates the
-quantitative output — it never invents prices.
+All AI agents talk to **one local [vLLM](https://docs.vllm.ai/) server** over its
+OpenAI-compatible API. Off by default. Agents only narrate the quantitative
+output — they never invent prices and **never place trades**.
+
+| Agent | When it runs | What it does |
+|-------|--------------|--------------|
+| **Briefing** | Snapshot fingerprint changes | Structured desk note for TUI / web |
+| **Alert enrich** | New IGNITION / STRONG BUY | One short line on push / Discord / Telegram |
+| **Away digest** | `ALPHA_AI_DIGEST_MS` timer | Compact “while you were away” summary |
 
 ```bash
-# Ollama (https://ollama.com) — start it, pull a model, then:
-ALPHA_AI=ollama ALPHA_AI_MODEL=llama3 node server.js
+# Start vLLM yourself (example), then:
+ALPHA_AI=vllm \
+  ALPHA_AI_MODEL=meta-llama/Meta-Llama-3.1-8B-Instruct \
+  ALPHA_AI_URL=http://localhost:8000/v1/chat/completions \
+  node server.js
 
-# LM Studio / llama.cpp / vLLM (OpenAI-compatible endpoint):
-ALPHA_AI=openai ALPHA_AI_MODEL=local-model \
-  ALPHA_AI_URL=http://localhost:1234/v1/chat/completions node index.js
+# Optional hourly digest to push/webhooks:
+ALPHA_AI_DIGEST_MS=3600000 ALPHA_AI=vllm ALPHA_AI_MODEL=... node server.js
 ```
 
-> **Note:** the AI must be reachable from wherever the app runs. Run the app on
-> the same PC as your model (or point `ALPHA_AI_URL` at it on your LAN). A remote
-> cloud session cannot reach a model on your home computer.
+Signal scores and alert thresholds stay authoritative; the model only narrates.
+If vLLM is down, the dashboard keeps working and shows `AI: degraded`.
+
+> **Note:** vLLM must be reachable from wherever the app runs (same host or LAN).
+> A remote cloud session cannot reach a model on your home computer.
+> Instruction-following instruct models (Llama 3.1, Qwen2.5, etc.) work best for JSON briefings.
 
 ## 🔬 Does it actually work? Backtest it
 
@@ -236,9 +251,9 @@ docker compose up -d
 - **caddy** — reverse proxy that terminates **HTTPS** (ports 80/443). Required so
   the PWA installs and phone push works (browsers need a secure context).
 - **alpha** — the web dashboard (port `8787`, proxied by Caddy).
-- **ollama** — a local LLM server with your **RTX 5090 passed through** for the
-  AI briefing. The GPU doesn't fetch data (the internet does that) — it runs the
-  model that writes the desk note.
+- **vllm** — OpenAI-compatible local LLM server with your **RTX 5090 passed through**
+  for desk agents. The GPU doesn't fetch data — it runs the model. Compose waits
+  on a `/v1/models` healthcheck before marking AI ready.
 
 ### HTTPS so push works from anywhere
 
@@ -264,19 +279,22 @@ Installable PWAs and Web Push require a secure context. Pick one:
   ```
 
   This replaces the Caddy stack (Tailscale provides the cert) and still runs the
-  Ollama/5090 AI service. The app binds only inside the Tailscale network
-  namespace — it is never published to your LAN or the internet. To run the
-  app directly (not in Docker) instead, use `tailscale serve --bg 8787`.
+  vLLM/5090 AI service (shared network namespace → `127.0.0.1:8000`). The app
+  binds only inside the Tailscale network namespace — it is never published to
+  your LAN or the internet. To run the app directly (not in Docker) instead, use
+  `tailscale serve --bg 8787`.
 
-After first start, pull a model into Ollama once:
+On first boot vLLM downloads the model into the `vllm-models` volume (set
+`HUGGING_FACE_HUB_TOKEN` in `.env` if the model is gated). Watch readiness with:
 
 ```bash
-docker exec -it ollama ollama pull llama3
+docker compose logs -f vllm
+curl -s http://localhost:8000/v1/models
 ```
 
 GPU passthrough needs the **NVIDIA Container Toolkit** on the host. If you don't
 want AI, set `ALPHA_AI: "off"` in `docker-compose.yml` and you can delete the
-`ollama` service entirely.
+`vllm` service entirely.
 
 > Everything runs on **your** hardware and network — the app, the data fetching,
 > and the model. Nothing depends on the cloud session that generated this code.
@@ -328,7 +346,7 @@ crypto-terminal/
 ├── scan.js             one-shot ranked snapshot
 ├── backtest.js         walk-forward backtest of the signal engine
 ├── Dockerfile          tiny zero-dep image
-├── docker-compose.yml  NAS deploy: Caddy(HTTPS) + app + Ollama (RTX 5090 GPU)
+├── docker-compose.yml  NAS deploy: Caddy(HTTPS) + app + vLLM (RTX 5090 GPU)
 ├── docker-compose.tailscale.yml  private HTTPS via Tailscale Serve
 ├── Caddyfile           auto-HTTPS reverse proxy
 ├── .env.example        deployment config
@@ -340,9 +358,9 @@ crypto-terminal/
     ├── signals.js      scoring engine (buy / explosion / regime / verdict)
     ├── engine.js       shared scan() used by web + snapshot (TUI has its own loop)
     ├── backtest.js     walk-forward signal evaluation
-    ├── ai.js           optional local-AI briefing (Ollama / OpenAI-compatible)
+    ├── ai.js           local AI desk agents (vLLM OpenAI-compatible)
     ├── webpush.js      zero-dep Web Push (VAPID + aes128gcm)
-    ├── webhooks.js     optional Discord / Telegram alert delivery
+    ├── webhooks.js     Discord / Telegram alert fan-out
     └── render.js       ANSI colors, sparklines, meters, layout helpers
 ```
 
