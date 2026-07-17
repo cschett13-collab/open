@@ -8,8 +8,8 @@
 #   4) On any device on your tailnet, open https://alpha.<tailnet>.ts.net
 #      → Add to Home Screen → 🔔 Alerts (push works: it's real HTTPS)
 #
-# This replaces the Caddy stack (Tailscale provides the cert). The app binds
-# only inside the Tailscale network namespace — it is not published to the LAN.
+# This replaces the Caddy stack (Tailscale provides the cert). The app + vLLM
+# share the Tailscale network namespace so agents reach vLLM at 127.0.0.1:8000.
 
 services:
   tailscale:
@@ -39,23 +39,37 @@ services:
     network_mode: service:tailscale
     depends_on:
       - tailscale
+      - vllm
     environment:
       PORT: "8787"
       ALPHA_BAR: "5m"
       ALPHA_TOP: "60"
       ALPHA_STOCKS: "on"
       ALPHA_PUSH: "on"
-      ALPHA_AI: "${ALPHA_AI:-ollama}"
-      ALPHA_AI_URL: "http://ollama:11434/api/generate"
-      ALPHA_AI_MODEL: "${ALPHA_AI_MODEL:-llama3}"
+      ALPHA_AI: "${ALPHA_AI:-vllm}"
+      ALPHA_AI_URL: "http://127.0.0.1:8000/v1/chat/completions"
+      ALPHA_AI_MODEL: "${ALPHA_AI_MODEL:-meta-llama/Meta-Llama-3.1-8B-Instruct}"
     restart: unless-stopped
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: vllm
+    # Same network namespace as the app → reach vLLM at 127.0.0.1:8000
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
     restart: unless-stopped
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}
     volumes:
-      - ollama-models:/root/.ollama
+      - vllm-models:/root/.cache/huggingface
+    command:
+      - "--model"
+      - "${ALPHA_AI_MODEL:-meta-llama/Meta-Llama-3.1-8B-Instruct}"
+      - "--host"
+      - "127.0.0.1"
+      - "--port"
+      - "8000"
     deploy:
       resources:
         reservations:
@@ -66,4 +80,4 @@ services:
 
 volumes:
   tailscale-state:
-  ollama-models:
+  vllm-models:

@@ -16,7 +16,7 @@
 import process from 'node:process';
 import {getAllSpotTickers, getCandles, pool} from './lib/okx.js';
 import {analyze, verdict, marketRegime} from './lib/signals.js';
-import {briefing, aiConfig} from './lib/ai.js';
+import {briefing, aiConfig, aiStatus} from './lib/ai.js';
 import * as R from './lib/render.js';
 import {c, color} from './lib/render.js';
 
@@ -87,14 +87,14 @@ async function deepScan() {
 		state.lastDeep = Date.now();
 		state.status = 'live';
 
-		// Optional: ask the local AI for a written briefing (async, non-blocking).
+		// Optional: ask local vLLM for a written briefing (async, non-blocking).
 		if (aiConfig().enabled) {
 			const booms = topBy('explosionScore', 5);
 			const buys = topBy('buyScore', 5);
 			const focus = booms.find(s => s.explosionScore >= 60) || buys.find(s => s.buyScore >= 60) || booms[0] || buys[0];
-			briefing({regime: state.regime, booms, buys, focus, bar: BAR}).then(text => {
-				if (text) state.briefing = {text, ts: Date.now()};
-			});
+			briefing({regime: state.regime, booms, buys, focus, bar: BAR}).then(result => {
+				if (result?.ok && result.text) state.briefing = {text: result.text, ts: Date.now()};
+			}).catch(() => {});
 		}
 	} catch (error) {
 		state.error = `scan: ${error.message}`;
@@ -326,11 +326,21 @@ function draw() {
 	out.push(header(width));
 	out.push('');
 	out.push(...focusCard(width));
-	if (state.briefing) {
+	if (state.briefing || aiConfig().enabled) {
 		out.push('');
-		out.push(color('  🧠 AI DESK BRIEFING', c.bold + c.cyan) + color(`  ${new Date(state.briefing.ts).toLocaleTimeString('en-US', {hour12: false})}`, c.dim));
-		for (const ln of wrap(state.briefing.text, width - 4).slice(0, 6)) {
-			out.push('  ' + color(ln, c.gray));
+		const st = aiStatus().state;
+		const stColor = st === 'ok' ? c.green : st === 'degraded' ? c.orange : c.dim;
+		out.push(
+			color('  🧠 AI DESK BRIEFING', c.bold + c.cyan) +
+			color(`  AI:${st}`, stColor) +
+			(state.briefing ? color(`  ${new Date(state.briefing.ts).toLocaleTimeString('en-US', {hour12: false})}`, c.dim) : ''),
+		);
+		if (state.briefing) {
+			for (const ln of wrap(state.briefing.text, width - 4).slice(0, 6)) {
+				out.push('  ' + color(ln, c.gray));
+			}
+		} else if (st === 'degraded') {
+			out.push('  ' + color('(vLLM unreachable — signals still live)', c.dim));
 		}
 	}
 

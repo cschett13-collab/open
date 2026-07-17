@@ -1,11 +1,12 @@
-# Run Alpha Terminal on your NAS / home server, with your RTX 5090 powering the
-# local AI briefing via Ollama.
+# Run Alpha Terminal on your NAS / home server, with your RTX 5090 powering
+# local AI desk agents via vLLM (OpenAI-compatible API).
 #
 #   docker compose up -d
 #   open http://<nas-ip>:8787  on your phone or PC
 #
 # The 5090 doesn't fetch market data (the internet does) — it accelerates the
-# local LLM that writes the desk briefing. Set ALPHA_AI=off below to skip AI.
+# local LLM that writes briefings / alert context / away digests.
+# Set ALPHA_AI=off below to skip AI (you can remove the vllm service too).
 
 services:
   caddy:
@@ -40,21 +41,45 @@ services:
       ALPHA_BAR: "5m"
       ALPHA_TOP: "60"
       ALPHA_STOCKS: "on"
-      # --- local AI (served by the ollama service below, on your 5090) ---
-      ALPHA_AI: "ollama"
-      ALPHA_AI_URL: "http://ollama:11434/api/generate"
-      ALPHA_AI_MODEL: "llama3"
+      # --- local AI desk agents (served by the vllm service below, on your 5090) ---
+      ALPHA_AI: "vllm"
+      ALPHA_AI_URL: "http://vllm:8000/v1/chat/completions"
+      ALPHA_AI_MODEL: "${ALPHA_AI_MODEL:-meta-llama/Meta-Llama-3.1-8B-Instruct}"
+      # ALPHA_AI_DIGEST_MS: "3600000"   # optional hourly away digest
     depends_on:
-      - ollama
+      vllm:
+        condition: service_healthy
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
+  vllm:
+    # Official vLLM OpenAI-compatible server. Pin/retag as you like.
+    image: vllm/vllm-openai:latest
+    container_name: vllm
     restart: unless-stopped
     ports:
-      - "11434:11434"      # remove to keep the model private to the compose network
+      - "8000:8000"      # remove to keep the model private to the compose network
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}
     volumes:
-      - ollama-models:/root/.ollama
+      - vllm-models:/root/.cache/huggingface
+    command:
+      - "--model"
+      - "${ALPHA_AI_MODEL:-meta-llama/Meta-Llama-3.1-8B-Instruct}"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/models', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 180s
     # --- RTX 5090 passthrough (needs NVIDIA Container Toolkit on the host) ---
     deploy:
       resources:
@@ -65,6 +90,6 @@ services:
               capabilities: [gpu]
 
 volumes:
-  ollama-models:
+  vllm-models:
   caddy-data:
   caddy-config:

@@ -61,14 +61,15 @@ async function main() {
 	}
 
 	if (aiConfig().enabled) {
-		process.stderr.write('\nAsking local AI for a briefing…\n');
-		const text = await briefing(snap);
-		if (text) {
+		process.stderr.write('\nAsking local vLLM for a briefing…\n');
+		const result = await briefing(snap);
+		if (result?.ok && result.text) {
 			console.log('\n' + color('🧠 AI DESK BRIEFING', c.bold + c.cyan));
 			console.log(color('─'.repeat(78), c.gray));
-			console.log(text.split('\n').map(l => '  ' + l).join('\n'));
+			console.log(result.text.split('\n').map(l => '  ' + l).join('\n'));
 		} else {
-			console.log('\n' + color('  (local AI unreachable — check ALPHA_AI settings)', c.dim));
+			console.log('\n' + color('  (vLLM unreachable — check ALPHA_AI / ALPHA_AI_URL)', c.dim));
+			if (result?.error) console.log(color('  ' + result.error, c.dim));
 		}
 	}
 
